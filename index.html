@@ -2073,7 +2073,8 @@ Should you add something? Consider: a detail they missed, a connection to relate
       if (newKey) {
         provider = 'groq';
         apiKey   = newKey;
-        try { localStorage.setItem('sherlock_groq_key', newKey); } catch(_) {}
+        selectedModel = 'llama-3.3-70b-versatile';
+        try { localStorage.setItem('sherlock_key_groq', newKey); } catch(_) {}
         const sel = document.getElementById('providerSelect');
         if (sel) sel.value = 'groq';
         addAICard('🔄 Switched to Groq — retrying…', 'system', false);
@@ -2139,7 +2140,7 @@ async function callGroq(userMsg) {
       'content-type':  'application/json'
     },
     body: JSON.stringify({
-      model:      (selectedModel && !selectedModel.startsWith('gemini') && !selectedModel.startsWith('claude') ? selectedModel : 'openai/gpt-oss-120b'),
+      model:      'llama-3.3-70b-versatile',
       max_tokens: 350,
       messages:   [
         { role: 'system', content: sys },
@@ -2150,8 +2151,14 @@ async function callGroq(userMsg) {
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
     const msg = e.error?.message || JSON.stringify(e) || 'Groq error';
-    const hint = res.status === 401 ? ' — regenerate key at console.groq.com/keys' : '';
-    throw new Error(`[HTTP ${res.status}] ${msg}${hint}`);
+    if (res.status === 401) {
+      try { localStorage.removeItem('sherlock_key_groq'); } catch(_) {}
+      provider = 'gemini';
+      const sel = document.getElementById('providerSelect');
+      if (sel) sel.value = 'gemini';
+      throw new Error('Groq key invalid or expired — key cleared. Please re-enter your API key.');
+    }
+    throw new Error(`[HTTP ${res.status}] ${msg}`);
   }
   return (await res.json()).choices[0].message.content.trim();
 }
@@ -2670,16 +2677,16 @@ function stopSpeaking() {
     const pdfUrl   = 'https://arxiv.org/pdf/' + arxivId;
     const apiUrl   = 'https://export.arxiv.org/api/query?id_list=' + arxivId;
     const proxyUrls = [
-      'https://api.allorigins.win/raw?url=' + encodeURIComponent(pdfUrl),
-      'https://corsproxy.io/?' + encodeURIComponent(pdfUrl),
-      'https://cors-anywhere.herokuapp.com/' + pdfUrl,
+      { url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(pdfUrl), timeout: 30000 },
+      { url: 'https://corsproxy.io/?' + encodeURIComponent(pdfUrl),              timeout: 20000 },
+      { url: 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(pdfUrl), timeout: 20000 },
     ];
 
     btn.textContent = 'Fetching…';
     btn.disabled = true;
 
-    // Pre-fill title from ArXiv Atom API (CORS-safe)
-    fetch(apiUrl).then(r => r.text()).then(xml => {
+    // Pre-fill title from ArXiv Atom API via CORS proxy
+    fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(apiUrl)).then(r => r.text()).then(xml => {
       const tm = xml.match(/<title>([^<]+)<\/title>/g);
       const paperTitle = tm && tm[1] ? tm[1].replace(/<\/?title>/g,'').replace(/\s+/g,' ').trim() : '';
       if (paperTitle) window._paperTitleOverride = paperTitle;
@@ -2691,8 +2698,8 @@ function stopSpeaking() {
       try {
         errEl.style.color = ''; errEl.textContent = 'Trying proxy…';
         const controller = new AbortController();
-        const tId = setTimeout(() => controller.abort(), 12000);
-        const res = await fetch(proxyUrl, { signal: controller.signal });
+        const tId = setTimeout(() => controller.abort(), proxyUrl.timeout || 20000);
+        const res = await fetch(proxyUrl.url, { signal: controller.signal });
         clearTimeout(tId);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const blob = await res.blob();
