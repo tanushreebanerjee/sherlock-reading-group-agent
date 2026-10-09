@@ -17,26 +17,29 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%8D%3C/text%3E%3C/svg%3E">
   <style>
     :root {
-      --bg: #0c1220;
-      --surface: #161f30;
-      --surface-2: #1c2a3e;
-      --border: #2a3a52;
-      --border-light: #334560;
-      --text: #dce8f5;
-      --text-muted: #7a97b8;
-      --text-dim: #4a6a8a;
-      --accent: #4f8ef7;
-      --accent-dim: rgba(79,142,247,0.12);
-      --accent-border: rgba(79,142,247,0.25);
-      --ai: #f0a040;
-      --ai-dim: rgba(240,160,64,0.10);
-      --ai-border: rgba(240,160,64,0.22);
-      --green: #3dd68c;
-      --green-dim: rgba(61,214,140,0.12);
-      --red: #f06070;
-      --red-dim: rgba(240,96,112,0.12);
-      --radius: 10px;
-      --radius-sm: 6px;
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface-2: #1c242f;
+      --border: #30363d;
+      --border-light: #3a434f;
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --text-dim: #484f58;
+      --accent: #2f81f7;
+      --accent-dim: rgba(47,129,247,0.10);
+      --accent-border: rgba(47,129,247,0.22);
+      --ai: #e8952c;
+      --ai-dim: rgba(232,149,44,0.10);
+      --ai-border: rgba(232,149,44,0.22);
+      --green: #3fb950;
+      --green-dim: rgba(63,185,80,0.12);
+      --red: #f85149;
+      --red-dim: rgba(248,81,73,0.12);
+      --radius: 12px;
+      --radius-sm: 8px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+      --shadow: 0 4px 20px rgba(0,0,0,0.5);
+      --ease: cubic-bezier(0.4,0,0.2,1);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,7 +47,7 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
       height: 100dvh;
       display: flex;
       flex-direction: column;
@@ -828,6 +831,23 @@
       <select id="modelSelect" onchange="selectedModel = this.value"
         style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-size:13px;outline:none;cursor:pointer;">
       </select>
+    </div>
+
+
+    <!-- ArXiv URL input -->
+    <div class="field" id="arxivField">
+      <label>ArXiv Link <span style="font-weight:400;opacity:.5">(paste abs or pdf URL — fetches PDF automatically)</span></label>
+      <div style="display:flex;gap:6px;align-items:stretch;">
+        <input type="url" id="arxivUrl" placeholder="https://arxiv.org/abs/2404.xxxxx or arxiv.org/pdf/..."
+          style="flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-size:13px;outline:none;"
+          onkeydown="if(event.key==='Enter')fetchArxiv()">
+        <button onclick="fetchArxiv()" id="arxivBtn"
+          style="padding:8px 14px;font-size:12px;font-weight:600;background:var(--accent-dim);border:1px solid var(--accent-border);border-radius:var(--radius-sm);color:var(--accent);cursor:pointer;white-space:nowrap;flex-shrink:0;">
+          Fetch PDF
+        </button>
+      </div>
+      <div class="err" id="arxivErr" style="margin-top:4px;"></div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Or paste the URL above instead of uploading a PDF</div>
     </div>
 
     <!-- Paper input -->
@@ -2332,7 +2352,90 @@ function stopSpeaking() {
   // onend will fire and clean everything up
 }
 
-function speak(text, btn) {
+
+
+  // ── Fetch PDF from ArXiv URL ────────────────────────────────────────────
+  async function fetchArxiv() {
+    const input = document.getElementById('arxivUrl');
+    const errEl = document.getElementById('arxivErr');
+    const btn   = document.getElementById('arxivBtn');
+    errEl.textContent = '';
+    let url = input.value.trim();
+    if (!url) return;
+
+    // Normalise to PDF URL
+    // abs/XXXX.XXXXX  →  pdf/XXXX.XXXXX.pdf
+    // already ends in .pdf → use as-is
+    url = url.replace(/^(https?:\/\/)?arxiv\.org\//, 'https://arxiv.org/');
+    if (!url.startsWith('http')) url = 'https://' + url;
+
+    const absMatch = url.match(/arxiv\.org\/abs\/([\d.v]+)/i);
+    const pdfMatch = url.match(/arxiv\.org\/pdf\/([\d.v]+)/i);
+    const arxivId  = (absMatch || pdfMatch)?.[1];
+    if (!arxivId) { errEl.textContent = 'Paste a valid arxiv.org/abs/... or arxiv.org/pdf/... link'; return; }
+
+    const pdfUrl = 'https://arxiv.org/pdf/' + arxivId + '.pdf';
+
+    btn.textContent = 'Fetching…';
+    btn.disabled = true;
+    try {
+      const res = await fetch(pdfUrl);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const blob = await res.blob();
+      const file = new File([blob], arxivId + '.pdf', { type: 'application/pdf' });
+
+      // Reuse the existing PDF processing pipeline
+      await processPDFFile(file);
+      input.value = '';
+      btn.textContent = 'Fetch PDF';
+      btn.disabled = false;
+    } catch(err) {
+      errEl.textContent = 'Could not fetch PDF: ' + err.message + '. Try downloading and uploading manually.';
+      btn.textContent = 'Fetch PDF';
+      btn.disabled = false;
+    }
+  }
+
+  // ── Sherlock avatar status ─────────────────────────────────────
+  function sherlockStatus(state) {
+    const el = document.getElementById('sherlockAvatar');
+    if (!el) return;
+    el.classList.remove('thinking', 'speaking');
+    if (state === 'thinking') el.classList.add('thinking');
+    else if (state === 'speaking') el.classList.add('speaking');
+  }
+
+  // ── Email preview label ─────────────────────────────────────────
+  function refreshEmailPreview() {
+    const el = document.getElementById('emailPreview');
+    if (!el) return;
+    const names = labMembers.filter(m => m.email).map(m => m.name);
+    if (!names.length) { el.textContent = ''; return; }
+    const shown = names.slice(0, 3).join(', ');
+    const extra = names.length > 3 ? ' +' + (names.length - 3) + ' more' : '';
+    el.textContent = shown + extra;
+  }
+
+  // ── Mark AI card helpful / not helpful ──────────────────────────
+  function markHelpful(idx, val, btn) {
+    const card = aiCards[idx];
+    if (!card) return;
+    card.helpful = val;
+    // Update both thumb buttons for this card
+    document.querySelectorAll('[data-helpful="' + idx + '"]').forEach(b => {
+      b.style.opacity = '0.4';
+      b.style.fontWeight = 'normal';
+    });
+    if (btn) { btn.style.opacity = '1'; btn.style.fontWeight = '700'; }
+  }
+
+  // ── Keyboard help modal ─────────────────────────────────────────
+  function showKbHelp() {
+    const m = document.getElementById('kbModal');
+    if (m) { m.style.display = 'flex'; m.onclick = e => { if (e.target === m) m.style.display = 'none'; }; }
+  }
+
+  function speak(text, btn) {
   // If already speaking, stop (toggle off)
   if (window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
@@ -2716,15 +2819,18 @@ function clearSavedKey() {
   try {
     const lastProvider = localStorage.getItem('sherlock_last_provider');
     if (lastProvider && ['gemini','groq','anthropic'].includes(lastProvider)) {
-      selectProvider(lastProvider);
-      document.querySelectorAll('.tab-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.p === lastProvider);
-      });
+      setProvider(lastProvider);
+    }
+    const ae = localStorage.getItem('sherlock_autoemail');
+    if (ae !== null) {
+      autoEmail = ae !== '0';
+      const chk = document.getElementById('autoEmailChk');
+      if (chk) chk.checked = autoEmail;
     }
   } catch(e) {}
-  // render member list on setup screen
   labMembers = loadMembers();
   renderMemberList();
+  try { refreshEmailPreview(); } catch(e) {}
 })();
 
 </script>
