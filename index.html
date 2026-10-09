@@ -17,26 +17,30 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%8D%3C/text%3E%3C/svg%3E">
   <style>
     :root {
-      --bg: #0c1220;
-      --surface: #161f30;
-      --surface-2: #1c2a3e;
-      --border: #2a3a52;
-      --border-light: #334560;
-      --text: #dce8f5;
-      --text-muted: #7a97b8;
-      --text-dim: #4a6a8a;
-      --accent: #4f8ef7;
-      --accent-dim: rgba(79,142,247,0.12);
-      --accent-border: rgba(79,142,247,0.25);
-      --ai: #f0a040;
-      --ai-dim: rgba(240,160,64,0.10);
-      --ai-border: rgba(240,160,64,0.22);
-      --green: #3dd68c;
-      --green-dim: rgba(61,214,140,0.12);
-      --red: #f06070;
-      --red-dim: rgba(240,96,112,0.12);
-      --radius: 10px;
-      --radius-sm: 6px;
+      /* Apple dark mode (macOS/iOS) system palette */
+      --bg:            #000000;
+      --surface:       #1C1C1E;
+      --surface-2:     #2C2C2E;
+      --border:        rgba(255,255,255,0.12);
+      --border-light:  rgba(255,255,255,0.18);
+      --text:          #FFFFFF;
+      --text-muted:    rgba(235,235,245,0.60);
+      --text-dim:      rgba(235,235,245,0.30);
+      --accent:        #0A84FF;
+      --accent-dim:    rgba(10,132,255,0.14);
+      --accent-border: rgba(10,132,255,0.30);
+      --ai:            #FF9F0A;
+      --ai-dim:        rgba(255,159,10,0.13);
+      --ai-border:     rgba(255,159,10,0.28);
+      --green:         #30D158;
+      --green-dim:     rgba(48,209,88,0.14);
+      --red:           #FF453A;
+      --red-dim:       rgba(255,69,58,0.14);
+      --radius:        12px;
+      --radius-sm:     8px;
+      --shadow-sm:     0 1px 3px rgba(0,0,0,0.6);
+      --shadow:        0 4px 24px rgba(0,0,0,0.7);
+      --ease:          cubic-bezier(0.4,0,0.2,1);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,7 +48,7 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
       height: 100dvh;
       display: flex;
       flex-direction: column;
@@ -323,7 +327,7 @@
     .layout {
       flex: 1;
       display: grid;
-      grid-template-columns: 1fr 360px;
+      grid-template-columns: 340px 1fr;
       overflow: hidden;
     }
 
@@ -830,6 +834,23 @@
       </select>
     </div>
 
+
+    <!-- ArXiv URL input -->
+    <div class="field" id="arxivField">
+      <label>ArXiv Link <span style="font-weight:400;opacity:.5">(paste abs or pdf URL — fetches PDF automatically)</span></label>
+      <div style="display:flex;gap:6px;align-items:stretch;">
+        <input type="url" id="arxivUrl" placeholder="https://arxiv.org/abs/2404.xxxxx or arxiv.org/pdf/..."
+          style="flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-size:13px;outline:none;"
+          onkeydown="if(event.key==='Enter')fetchArxiv()">
+        <button onclick="fetchArxiv()" id="arxivBtn"
+          style="padding:8px 14px;font-size:12px;font-weight:600;background:var(--accent-dim);border:1px solid var(--accent-border);border-radius:var(--radius-sm);color:var(--accent);cursor:pointer;white-space:nowrap;flex-shrink:0;">
+          Fetch PDF
+        </button>
+      </div>
+      <div class="err" id="arxivErr" style="margin-top:4px;"></div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Or paste the URL above instead of uploading a PDF</div>
+    </div>
+
     <!-- Paper input -->
     <div class="field">
       <label>This Week's Paper — PDF</label>
@@ -842,11 +863,6 @@
       <div class="err" id="paperErr"></div>
     </div>
 
-    <div class="field">
-      <label>Paper Title <span style="font-weight:400;opacity:.5">(optional — auto-filled from filename)</span></label>
-      <input type="text" id="paperTitleInput" placeholder="e.g. Gaussian Splatting for Real-Time 3D…">
-    </div>
-
     <!-- AI sensitivity -->
     <div class="field">
       <label>How chatty should the AI be?</label>
@@ -857,6 +873,21 @@
       </div>
     </div>
 
+
+    <!-- API enrichment keys -->
+    <div class="field">
+      <label>SearchAPI Key <span style="font-weight:400;opacity:.5">(optional — enables Google Scholar citations enrichment; get free key at <a href="https://searchapi.io" target="_blank" style="color:var(--accent)">searchapi.io</a>)</span></label>
+      <input type="password" id="searchApiKey" placeholder="searchapi_…" autocomplete="off"
+        style="font-size:13px;"
+        oninput="try{localStorage.setItem('sherlock_searchapi_key',this.value)}catch(e){}">
+    </div>
+
+    <div class="field">
+      <label>Tavily Key <span style="font-weight:400;opacity:.5">(optional — adds live web search context; get key at <a href="https://tavily.com" target="_blank" style="color:var(--accent)">tavily.com</a>)</span></label>
+      <input type="password" id="tavilyKey" placeholder="tvly-…" autocomplete="off"
+        style="font-size:13px;"
+        oninput="try{localStorage.setItem('sherlock_tavily_key',this.value)}catch(e){}">
+    </div>
 
     <!-- Wake word -->
     <div class="field">
@@ -887,6 +918,17 @@
         </div>
       </div>
     </details>
+
+    <!-- Auto-email after meeting -->
+    <div id="autoEmailRow" style="display:flex;align-items:center;gap:10px;padding:10px 0 4px;">
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--text-muted);user-select:none;">
+        <input type="checkbox" id="autoEmailChk" checked
+          onchange="autoEmail=this.checked;localStorage.setItem('sherlock_autoemail',this.checked?'1':'0')"
+          style="width:14px;height:14px;accent-color:var(--ai);cursor:pointer;">
+        📧 Email summary to lab after meeting
+      </label>
+      <span id="emailPreview" style="font-size:10px;color:var(--text-dim);margin-left:auto;"></span>
+    </div>
 
     <div class="err" id="startErr"></div>
     <button class="btn-primary" id="startBtn" onclick="startMeeting()">
@@ -970,6 +1012,7 @@
     </div>
 
     <button class="icon-btn" id="ttsBtn" onclick="toggleTTS()" title="Auto-read AI responses">🔇</button>
+    <button class="icon-btn" id="kokoroBtn" onclick="toggleKokoro()" title="Kokoro TTS — high-quality AI voice (loads ~80MB once, free)" style="font-size:11px;padding:5px 9px;opacity:0.5">🎙</button>
     <button class="icon-btn" id="modeBtn" onclick="cycleSensitivity()" title="AI chattiness — click to cycle">🎯</button>
     <button class="icon-btn" onclick="openMeetingSettings()" title="Switch provider / API key" style="font-size:16px;">⚙️</button>
     <button class="icon-btn" onclick="showKbHelp()" title="Keyboard shortcuts (press ?)">⌨️</button>
@@ -1372,6 +1415,19 @@ function clearSavedKey() {
   } catch(e) {}
 }
 
+// ── AUTO-EMAIL ────────────────────────────────────────────────────────────
+let autoEmail = true; // default on; overridden by restoreSession
+
+function refreshEmailPreview() {
+  const el = document.getElementById('emailPreview');
+  if (!el) return;
+  const addrs = labMembers.filter(m => m.email);
+  if (!addrs.length) { el.textContent = ''; return; }
+  const names = addrs.slice(0, 3).map(m => m.name).join(', ');
+  const extra = addrs.length > 3 ? ` +${addrs.length - 3} more` : '';
+  el.textContent = names + extra;
+}
+
 // ── SHERLOCK STATUS ──────────────────────────────────────────────────────
 function sherlockStatus(state) {
   const av = document.getElementById('sherlockAvatar');
@@ -1437,8 +1493,43 @@ document.addEventListener('keydown', e => {
   } catch(e) {}
   // render member list on setup screen
   labMembers = loadMembers();
+  // Auto-email preference
+  const savedAutoEmail = localStorage.getItem('sherlock_autoemail');
+  autoEmail = savedAutoEmail === null ? true : savedAutoEmail === '1';
+  const chk = document.getElementById('autoEmailChk');
+  if (chk) chk.checked = autoEmail;
+  // Show email preview
+  refreshEmailPreview();
   renderMemberList();
 })();
+
+
+// ── QUOTA FALLBACK MODAL ────────────────────────────────────────────────────
+let _quotaResolve = null;
+
+function showQuotaModal(msg) {
+  return new Promise(resolve => {
+    _quotaResolve = resolve;
+    const el = document.getElementById('quotaModal');
+    if (el) { el.style.display = 'flex'; }
+    const msgEl = document.getElementById('quotaModalMsg');
+    if (msgEl) msgEl.textContent = msg || 'Your API key hit its daily limit.';
+    const inp = document.getElementById('quotaKeyInput');
+    if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 50); }
+  });
+}
+
+function submitQuotaKey() {
+  const key = (document.getElementById('quotaKeyInput')?.value || '').trim();
+  dismissQuotaModal();
+  if (_quotaResolve) { _quotaResolve(key || null); _quotaResolve = null; }
+}
+
+function dismissQuotaModal() {
+  const el = document.getElementById('quotaModal');
+  if (el) el.style.display = 'none';
+  if (_quotaResolve) { _quotaResolve(null); _quotaResolve = null; }
+}
 
 </script>
 <script>
@@ -1539,6 +1630,7 @@ function loadMembers() {
 
 function saveMembers(members) {
   try { localStorage.setItem('sherlock_members', JSON.stringify(members)); } catch(e) {}
+  refreshEmailPreview();
 }
 
 let labMembers = loadMembers();
@@ -1645,6 +1737,21 @@ async function extractPDF(file) {
   return text;
 }
 
+// ── processPDFFile: shared helper so fetchArxiv + drag-drop share same pipeline ──
+async function processPDFFile(file) {
+  document.getElementById('fileName').textContent = '✓ ' + file.name;
+  // Inject into the hidden file input so startMeeting can read it
+  try {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('pdfFile').files = dt.files;
+  } catch(e) { /* DataTransfer not supported in all browsers */ }
+  // Pre-populate title from filename if not already set by ArXiv fetch
+  if (!window._paperTitleOverride) {
+    window._paperTitleOverride = file.name.replace(/\.pdf$/i, '');
+  }
+}
+
 // ── MODEL SELECT ─────────────────────────────
 function populateModelSelect(p) {
   const sel = document.getElementById('modelSelect');
@@ -1720,8 +1827,8 @@ async function startMeeting() {
     if (!file) { showErr('paperErr', 'Please select a PDF file'); btn.disabled = false; lbl.textContent = 'Start Meeting'; return; }
     lbl.textContent = 'Extracting text…';
     paperText   = await extractPDF(file);
-    const customTitle = document.getElementById('paperTitleInput').value.trim();
-    paperTitle_ = customTitle || file.name.replace(/\.pdf$/i, '');
+    paperTitle_ = window._paperTitleOverride || file.name.replace(/\.pdf$/i, '');
+    window._paperTitleOverride = null;
   } catch (e) {
     showErr('paperErr', e.message);
     btn.disabled = false; lbl.textContent = 'Start Meeting';
@@ -1756,7 +1863,14 @@ async function startMeeting() {
   document.getElementById('paperTitle').textContent = paperTitle_;
   // Background: enrich context with Semantic Scholar related papers
   relatedContext = '';
-  enrichFromSemanticScholar(paperTitle_).catch(() => {});
+  // Enrichment: SearchAPI (Google Scholar) if key present, else OpenAlex (free, CORS-safe)
+  (async () => {
+    try {
+      const usedSearchApi = await enrichFromSearchApi(paperTitle_);
+      if (!usedSearchApi) await enrichFromOpenAlex(paperTitle_);
+    } catch(e) { /* ignore */ }
+  })();
+  enrichFromTavily(paperTitle_).catch(() => {});
   setStatus('on', 'Ready — press 🎤');
   btn.disabled = false; lbl.textContent = 'Start Meeting';
 }
@@ -1951,7 +2065,31 @@ Should you add something? Consider: a detail they missed, a connection to relate
       animateCooldown();
     }
   } catch (e) {
-    addAICard('⚠️ API error: ' + e.message, 'error', question);
+    const isQuota = e.message && (e.message.toLowerCase().includes('quota') || e.message.toLowerCase().includes('rate limit') || e.message.includes('429'));
+    if (isQuota) {
+      // Show inline modal asking for alternate key
+      const currentLabel = provider === 'gemini' ? 'Gemini' : provider === 'groq' ? 'Groq' : 'Anthropic';
+      const newKey = await showQuotaModal(currentLabel + ' API quota exceeded for today. Paste a Groq key to continue (free at console.groq.com/keys):');
+      if (newKey) {
+        provider = 'groq';
+        apiKey   = newKey;
+        try { localStorage.setItem('sherlock_groq_key', newKey); } catch(_) {}
+        const sel = document.getElementById('providerSelect');
+        if (sel) sel.value = 'groq';
+        addAICard('🔄 Switched to Groq — retrying…', 'system', false);
+        try {
+          const retryText = await callClaude(userMsg);
+          if (retryText && retryText !== 'NO_CONTRIBUTION') {
+            addAICard(retryText, trigger, question);
+            if (ttsOn) speak(retryText);
+          }
+        } catch(e2) { addAICard('⚠️ Groq error: ' + e2.message, 'error', question); }
+      } else {
+        addAICard('⚠️ Quota exceeded — skipped this turn.', 'error', false);
+      }
+    } else {
+      addAICard('⚠️ API error: ' + e.message, 'error', question);
+    }
   }
 
   hideThinking();
@@ -1966,23 +2104,30 @@ async function callClaude(userMsg) {
 
 async function callGemini(userMsg) {
   const sys = buildSystem();
-  const gModel = selectedModel && selectedModel.startsWith('gemini') ? selectedModel : 'gemini-3.8-flash';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${apiKey}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: sys }] },
-      contents: [{ role: 'user', parts: [{ text: userMsg }] }],
-      generationConfig: { maxOutputTokens: 350, temperature: 0.7 }
-    })
-  });
-  if (!res.ok) {
+  const base = (selectedModel && selectedModel.startsWith('gemini')) ? selectedModel : 'gemini-3.8-flash';
+  // Cascade through lighter models when quota hit
+  const models = [...new Set([base, 'gemini-2.5-flash', 'gemini-3.5-flash-lite'])];
+  for (const gModel of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${apiKey}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: sys }] },
+        contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+        generationConfig: { maxOutputTokens: 350, temperature: 0.7 }
+      })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'NO_CONTRIBUTION';
+    }
     const e = await res.json().catch(() => ({}));
-    throw new Error(e.error?.message || `Gemini HTTP ${res.status}`);
+    const isQuota = res.status === 429 || (e.error?.message || '').toLowerCase().includes('quota');
+    if (!isQuota) throw new Error(e.error?.message || `Gemini HTTP ${res.status}`);
+    console.warn(`Gemini quota on ${gModel}, trying next…`);
   }
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'NO_CONTRIBUTION';
+  throw new Error('quota exceeded — all Gemini models at daily limit');
 }
 
 async function callGroq(userMsg) {
@@ -2035,8 +2180,8 @@ async function callAnthropic(userMsg) {
   return (await res.json()).content[0].text.trim();
 }
 
-// ── SEMANTIC SCHOLAR ENRICHMENT ──────────────
-async function enrichFromSemanticScholar(title) {
+// ── OPENALEX ENRICHMENT (CORS-safe replacement for Semantic Scholar) ────────
+async function enrichFromOpenAlex(title) {
   function setEnrichStatus(msg) {
     const el = document.getElementById('enrichStatus');
     if (!el) return;
@@ -2044,47 +2189,82 @@ async function enrichFromSemanticScholar(title) {
     el.style.display = msg ? 'inline-block' : 'none';
   }
 
-  setEnrichStatus('🔍 Searching Semantic Scholar…');
+  function reconstructAbstract(inv) {
+    if (!inv) return '';
+    try {
+      const words = [];
+      for (const [word, positions] of Object.entries(inv)) {
+        for (const pos of positions) words[pos] = word;
+      }
+      return words.filter(Boolean).join(' ');
+    } catch(e) { return ''; }
+  }
+
+  setEnrichStatus('🔍 Searching OpenAlex…');
+  const BASE = 'https://api.openalex.org';
+  const EMAIL = 'tbanerje@umd.edu';
+
   try {
-    // Step 1: find the paper
-    const searchUrl = 'https://api.semanticscholar.org/graph/v1/paper/search?query='
-      + encodeURIComponent(title)
-      + '&fields=paperId,title,authors,abstract&limit=1';
-    const searchRes = await fetch(searchUrl);
-    if (!searchRes.ok) throw new Error('S2 search HTTP ' + searchRes.status);
+    // Step 1: find paper by title
+    const searchRes = await fetch(
+      `${BASE}/works?search=${encodeURIComponent(title)}&per-page=1` +
+      `&select=id,title,abstract_inverted_index,cited_by_count,referenced_works` +
+      `&mailto=${EMAIL}`
+    );
+    if (!searchRes.ok) throw new Error('OA search HTTP ' + searchRes.status);
     const searchData = await searchRes.json();
-    const paper = searchData.data?.[0];
-    if (!paper?.paperId) { setEnrichStatus(''); return; }
+    const paper = searchData.results?.[0];
+    if (!paper?.id) { setEnrichStatus(''); return; }
+
+    const oaId = paper.id.replace('https://openalex.org/', '');
 
     setEnrichStatus('📚 Fetching related work…');
 
-    // Step 2: fetch references with abstracts
-    const refUrl = 'https://api.semanticscholar.org/graph/v1/paper/'
-      + paper.paperId
-      + '/references?fields=paperId,title,abstract,authors,citationCount&limit=25';
-    const refRes = await fetch(refUrl);
-    if (!refRes.ok) throw new Error('S2 refs HTTP ' + refRes.status);
-    const refData = await refRes.json();
+    // Step 2: cited papers (references this paper cites) - up to 20
+    let refs = [];
+    const refIds = (paper.referenced_works || []).slice(0, 20);
+    if (refIds.length) {
+      try {
+        const idsFilter = refIds.map(id => id.replace('https://openalex.org/', '')).join('|');
+        const refRes = await fetch(
+          `${BASE}/works?filter=openalex_id:${idsFilter}&per-page=20` +
+          `&select=id,title,abstract_inverted_index,cited_by_count,authorships` +
+          `&mailto=${EMAIL}`
+        );
+        if (refRes.ok) {
+          const refData = await refRes.json();
+          refs = (refData.results || [])
+            .map(p => ({
+              title: p.title || '',
+              abstract: reconstructAbstract(p.abstract_inverted_index),
+              authors: (p.authorships || []).slice(0, 3).map(a => a.author?.display_name).filter(Boolean),
+              citationCount: p.cited_by_count || 0
+            }))
+            .filter(p => p.abstract.length > 80)
+            .sort((a, b) => b.citationCount - a.citationCount)
+            .slice(0, 8);
+        }
+      } catch(e) { /* ignore */ }
+    }
 
-    const refs = (refData.data || [])
-      .map(r => r.citedPaper)
-      .filter(p => p?.abstract && p.abstract.length > 80)
-      .sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0))
-      .slice(0, 8);
-
-    // Step 3: also get citing papers (what cites this paper?)
-    const citUrl = 'https://api.semanticscholar.org/graph/v1/paper/'
-      + paper.paperId
-      + '/citations?fields=paperId,title,abstract,authors,citationCount&limit=15';
+    // Step 3: papers that cite this work (recent citations)
     let citingPapers = [];
     try {
-      const citRes = await fetch(citUrl);
+      const citRes = await fetch(
+        `${BASE}/works?filter=cites:${oaId}&per-page=8&sort=cited_by_count:desc` +
+        `&select=id,title,abstract_inverted_index,cited_by_count,authorships` +
+        `&mailto=${EMAIL}`
+      );
       if (citRes.ok) {
         const citData = await citRes.json();
-        citingPapers = (citData.data || [])
-          .map(c => c.citingPaper)
-          .filter(p => p?.abstract && p.abstract.length > 80)
-          .sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0))
+        citingPapers = (citData.results || [])
+          .map(p => ({
+            title: p.title || '',
+            abstract: reconstructAbstract(p.abstract_inverted_index),
+            authors: (p.authorships || []).slice(0, 3).map(a => a.author?.display_name).filter(Boolean),
+            citationCount: p.cited_by_count || 0
+          }))
+          .filter(p => p.abstract.length > 80)
           .slice(0, 4);
       }
     } catch(e) { /* ignore */ }
@@ -2092,12 +2272,12 @@ async function enrichFromSemanticScholar(title) {
     if (refs.length === 0 && citingPapers.length === 0) { setEnrichStatus(''); return; }
 
     const fmtPaper = (p) => {
-      const authors = (p.authors || []).map(a => a.name).slice(0, 3).join(', ');
-      const abstract = (p.abstract || '').slice(0, 280);
+      const authors = p.authors.join(', ');
+      const abstract = p.abstract.slice(0, 280);
       return `• "${p.title}" (${authors}): ${abstract}…`;
     };
 
-    let ctx = '\n\n<related_work>\nSherlock has additional knowledge from Semantic Scholar about papers related to this work. Use this context to give richer, more connected answers.\n';
+    let ctx = '\n\n<related_work>\nSherlock has additional knowledge from OpenAlex about papers related to this work. Use this context to give richer, more connected answers.\n';
     if (refs.length) {
       ctx += '\n[Cited by this paper]\n' + refs.map(fmtPaper).join('\n');
     }
@@ -2111,10 +2291,84 @@ async function enrichFromSemanticScholar(title) {
     setEnrichStatus(`✅ +${total} related papers in context`);
     setTimeout(() => setEnrichStatus(''), 5000);
   } catch(e) {
-    console.warn('Semantic Scholar enrichment failed:', e.message);
-    document.getElementById('enrichStatus') && (document.getElementById('enrichStatus').style.display = 'none');
+    console.warn('OpenAlex enrichment failed:', e.message);
+    const el = document.getElementById('enrichStatus');
+    if (el) el.style.display = 'none';
   }
 }
+
+
+// ── SEARCHAPI GOOGLE SCHOLAR ENRICHMENT ────────────────────────────────────
+async function enrichFromSearchApi(title) {
+  const key = document.getElementById('searchApiKey')?.value.trim()
+    || (() => { try { return localStorage.getItem('sherlock_searchapi_key') || ''; } catch(e) { return ''; } })();
+  if (!key) return false; // signal: no key, caller should try OpenAlex
+
+  function setEnrichStatus(msg) {
+    const el = document.getElementById('enrichStatus');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = msg ? 'inline-block' : 'none';
+  }
+
+  setEnrichStatus('🎓 Searching Google Scholar…');
+  const BASE = 'https://www.searchapi.io/api/v1/search';
+
+  try {
+    // Step 1: search for the paper
+    const searchRes = await fetch(
+      `${BASE}?engine=google_scholar&q=${encodeURIComponent(title)}&num=1&api_key=${key}`
+    );
+    if (!searchRes.ok) throw new Error('SearchAPI HTTP ' + searchRes.status);
+    const searchData = await searchRes.json();
+    const top = searchData.organic_results?.[0];
+    if (!top) { setEnrichStatus(''); return true; }
+
+    const citesId = top.inline_links?.cited_by?.cites_id;
+    const snippet = top.snippet || '';
+
+    setEnrichStatus('📚 Fetching citing papers…');
+
+    // Step 2: get papers that cite this (if cites_id available)
+    let citingPapers = [];
+    if (citesId) {
+      try {
+        const citRes = await fetch(
+          `${BASE}?engine=google_scholar&cites=${citesId}&num=8&api_key=${key}`
+        );
+        if (citRes.ok) {
+          const citData = await citRes.json();
+          citingPapers = (citData.organic_results || []).slice(0, 6).map(r => ({
+            title: r.title || '',
+            snippet: r.snippet || '',
+            pub: r.publication || ''
+          })).filter(r => r.snippet.length > 40);
+        }
+      } catch(e) { /* ignore */ }
+    }
+
+    const fmtPaper = (r) => `• "${r.title}" (${r.pub}): ${r.snippet.slice(0, 250)}…`;
+
+    let ctx = '\n\n<related_work>\nSherlock retrieved live Google Scholar data about this paper.\n';
+    if (snippet) ctx += `\n[About this paper]\n${top.title}: ${snippet}\n`;
+    if (citingPapers.length) {
+      ctx += '\n[Recent papers citing this work]\n' + citingPapers.map(fmtPaper).join('\n');
+    }
+    ctx += '\n</related_work>';
+
+    relatedContext = ctx;
+    const total = citingPapers.length;
+    setEnrichStatus(total ? `✅ Google Scholar: +${total} citing papers` : '✅ Google Scholar: found');
+    setTimeout(() => setEnrichStatus(''), 5000);
+    return true;
+  } catch(e) {
+    console.warn('SearchAPI enrichment failed:', e.message);
+    const el = document.getElementById('enrichStatus');
+    if (el) el.style.display = 'none';
+    return false;
+  }
+}
+
 
 function buildSystem() {
   const paper = paperText.length > MAX_PAPER_CHARS
@@ -2277,12 +2531,100 @@ function submitAsk() {
 
 // ── TTS ──────────────────────────────────────
 let activeSpeakBtn = null;
+let kokoroReady   = false;
+let kokoroPipeline = null;
+let kokoroVoice   = 'af_heart';  // default Kokoro voice
+let useKokoro     = false;        // toggled by user in settings
 
 function toggleTTS() {
   ttsOn = !ttsOn;
   const btn = document.getElementById('ttsBtn');
   btn.textContent = ttsOn ? '🔊' : '🔇';
   btn.classList.toggle('on', ttsOn);
+}
+
+async function toggleKokoro() {
+  const btn = document.getElementById('kokoroBtn');
+  if (useKokoro) {
+    useKokoro = false;
+    if (btn) { btn.style.opacity = '0.5'; btn.style.background = ''; }
+    return;
+  }
+  if (!kokoroPipeline) {
+    if (btn) { btn.textContent = '⏳ Loading…'; btn.style.opacity = '1'; }
+    try {
+      // Load kokoro-js via ESM CDN (first load ~80MB, cached thereafter)
+      let KokoroPipeline;
+      const kokoroCdns = [
+        'https://esm.sh/kokoro-js@1.2.2',
+        'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.2/+esm',
+      ];
+      let kokLastErr;
+      for (const cdnUrl of kokoroCdns) {
+        try { const m = await import(cdnUrl); KokoroPipeline = m.KokoroPipeline; if (KokoroPipeline) break; }
+        catch(e) { kokLastErr = e; }
+      }
+      if (!KokoroPipeline) throw kokLastErr || new Error('KokoroPipeline not found');
+      kokoroPipeline = await KokoroPipeline.from_pretrained('onnx-community/Kokoro-82M-v1.0', { dtype: 'q8' });
+      kokoroReady = true;
+      useKokoro = true;
+      if (btn) { btn.textContent = '🎙 Kokoro ✓'; btn.style.opacity = '1'; btn.style.background = 'var(--accent-dim)'; }
+      // Play a quick sample
+      const { audio } = await kokoroPipeline('Kokoro is ready. I can read responses aloud for you.', { voice: kokoroVoice });
+      const blob = new Blob([audio], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      a.onended = () => URL.revokeObjectURL(url);
+      a.play();
+    } catch(e) {
+      console.error('Kokoro load failed:', e);
+      if (btn) { btn.textContent = '🎙 Kokoro'; btn.style.opacity = '0.5'; }
+      alert('Kokoro failed to load: ' + e.message + '\n\nFalling back to browser TTS.');
+    }
+  } else {
+    useKokoro = true;
+    if (btn) { btn.style.opacity = '1'; btn.style.background = 'var(--accent-dim)'; }
+  }
+}
+
+// ── TAVILY WEB SEARCH ENRICHMENT ───────────────────────────────────
+async function enrichFromTavily(title) {
+  const key = document.getElementById('tavilyKey')?.value.trim()
+    || (() => { try { return localStorage.getItem('sherlock_tavily_key') || ''; } catch(e) { return ''; } })();
+  if (!key) return;
+
+  try {
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: key,
+        query: title + ' machine learning research',
+        search_depth: 'basic',
+        max_results: 5,
+        include_answer: true
+      })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.results?.length && !data.answer) return;
+
+    let tavilyCtx = '\n\n<web_search>\nSherlock also searched the web for recent context about this paper:\n';
+    if (data.answer) tavilyCtx += '\nSummary: ' + data.answer + '\n';
+    const results = (data.results || []).slice(0, 4);
+    results.forEach(r => {
+      tavilyCtx += `\n• ${r.title}: ${(r.content || '').slice(0, 200)}… (${r.url})`;
+    });
+    tavilyCtx += '\n</web_search>';
+
+    relatedContext = (relatedContext || '') + tavilyCtx;
+    const enrichEl = document.getElementById('enrichStatus');
+    if (enrichEl && enrichEl.style.display !== 'none') {
+      enrichEl.textContent += ' + web';
+    }
+  } catch(e) {
+    console.warn('Tavily search failed:', e.message);
+  }
 }
 
 function showTTSBanner(text) {
@@ -2297,40 +2639,178 @@ function hideTTSBanner() {
 }
 function stopSpeaking() {
   window.speechSynthesis.cancel();
+  if (window._kokoroAudio) {
+    try { window._kokoroAudio.pause(); window._kokoroAudio.currentTime = 0; } catch(e) {}
+    window._kokoroAudio = null;
+  }
   // onend will fire and clean everything up
 }
 
-function speak(text, btn) {
-  // If already speaking, stop (toggle off)
-  if (window.speechSynthesis.speaking) {
-    window.speechSynthesis.cancel();
-    // onend fires synchronously after cancel in most browsers, which clears activeSpeakBtn.
-    // If the same button triggered this, we're toggling off — done.
-    if (btn && btn === activeSpeakBtn) return;
+
+
+  // ── Fetch PDF from ArXiv URL ────────────────────────────────────────────
+  async function fetchArxiv() {
+    const input = document.getElementById('arxivUrl');
+    const errEl = document.getElementById('arxivErr');
+    const btn   = document.getElementById('arxivBtn');
+    errEl.textContent = '';
+    let raw = input.value.trim();
+    if (!raw) return;
+
+    // Parse arXiv ID from any form:
+    // 2510.11690 | arxiv.org/abs/2510.11690 | https://arxiv.org/pdf/2510.11690v2
+    const idRe = /\b(\d{4}\.\d{4,5}(?:v\d+)?)\b/;
+    const m = raw.match(idRe);
+    const arxivId = m ? m[1] : null;
+    if (!arxivId) {
+      errEl.textContent = 'Could not find an arXiv ID. Paste the URL or just the ID, e.g. 2510.11690';
+      return;
+    }
+
+    const pdfUrl   = 'https://arxiv.org/pdf/' + arxivId;
+    const apiUrl   = 'https://export.arxiv.org/api/query?id_list=' + arxivId;
+    const proxyUrls = [
+      'https://api.allorigins.win/raw?url=' + encodeURIComponent(pdfUrl),
+      'https://corsproxy.io/?' + encodeURIComponent(pdfUrl),
+      'https://cors-anywhere.herokuapp.com/' + pdfUrl,
+    ];
+
+    btn.textContent = 'Fetching…';
+    btn.disabled = true;
+
+    // Pre-fill title from ArXiv Atom API (CORS-safe)
+    fetch(apiUrl).then(r => r.text()).then(xml => {
+      const tm = xml.match(/<title>([^<]+)<\/title>/g);
+      const paperTitle = tm && tm[1] ? tm[1].replace(/<\/?title>/g,'').replace(/\s+/g,' ').trim() : '';
+      if (paperTitle) window._paperTitleOverride = paperTitle;
+    }).catch(() => {});
+
+    // Try CORS proxies in sequence
+    let fetched = false;
+    for (const proxyUrl of proxyUrls) {
+      try {
+        errEl.style.color = ''; errEl.textContent = 'Trying proxy…';
+        const controller = new AbortController();
+        const tId = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(tId);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const blob = await res.blob();
+        if (blob.size < 5000) throw new Error('response too small (' + blob.size + 'B)');
+        const file = new File([blob], arxivId + '.pdf', { type: 'application/pdf' });
+        await processPDFFile(file);
+        input.value = '';
+        errEl.style.color = 'var(--green)';
+        errEl.textContent = '✓ PDF loaded from arXiv';
+        setTimeout(() => { errEl.textContent = ''; errEl.style.color = ''; }, 3000);
+        fetched = true;
+        break;
+      } catch(err) {
+        console.warn('arXiv proxy failed:', err.message);
+      }
+    }
+    if (!fetched) {
+      window.open(pdfUrl, '_blank');
+      errEl.style.color = '';
+      errEl.textContent = '⚠️ Blocked by browser. PDF opened in new tab — download and upload below.';
+    }
+    btn.textContent = 'Fetch PDF';
+    btn.disabled = false;
   }
 
+  // ── Sherlock avatar status ─────────────────────────────────────
+  function sherlockStatus(state) {
+    const el = document.getElementById('sherlockAvatar');
+    if (!el) return;
+    el.classList.remove('thinking', 'speaking');
+    if (state === 'thinking') el.classList.add('thinking');
+    else if (state === 'speaking') el.classList.add('speaking');
+  }
+
+  // ── Email preview label ─────────────────────────────────────────
+  function refreshEmailPreview() {
+    const el = document.getElementById('emailPreview');
+    if (!el) return;
+    const names = labMembers.filter(m => m.email).map(m => m.name);
+    if (!names.length) { el.textContent = ''; return; }
+    const shown = names.slice(0, 3).join(', ');
+    const extra = names.length > 3 ? ' +' + (names.length - 3) + ' more' : '';
+    el.textContent = shown + extra;
+  }
+
+  // ── Mark AI card helpful / not helpful ──────────────────────────
+  function markHelpful(idx, val, btn) {
+    const card = aiCards[idx];
+    if (!card) return;
+    card.helpful = val;
+    // Update both thumb buttons for this card
+    document.querySelectorAll('[data-helpful="' + idx + '"]').forEach(b => {
+      b.style.opacity = '0.4';
+      b.style.fontWeight = 'normal';
+    });
+    if (btn) { btn.style.opacity = '1'; btn.style.fontWeight = '700'; }
+  }
+
+  // ── Keyboard help modal ─────────────────────────────────────────
+  function showKbHelp() {
+    const m = document.getElementById('kbModal');
+    if (m) { m.style.display = 'flex'; m.onclick = e => { if (e.target === m) m.style.display = 'none'; }; }
+  }
+
+  function speak(text, btn) {
+  if (useKokoro && kokoroPipeline) {
+    speakKokoro(text, btn);
+    return;
+  }
+  speakWebSpeech(text, btn);
+}
+
+async function speakKokoro(text, btn) {
+  // Stop any in-progress audio
+  stopSpeaking();
+  if (btn) { activeSpeakBtn = btn; btn.textContent = '⏹ Stop'; }
+  showTTSBanner(text);
+  sherlockStatus('speaking');
+  try {
+    const { audio } = await kokoroPipeline(text, { voice: kokoroVoice });
+    const blob = new Blob([audio], { type: 'audio/wav' });
+    const url  = URL.createObjectURL(blob);
+    const aud  = new Audio(url);
+    window._kokoroAudio = aud;
+    aud.onended = aud.onerror = () => {
+      if (activeSpeakBtn) { activeSpeakBtn.textContent = '🔊 Read aloud'; activeSpeakBtn = null; }
+      hideTTSBanner();
+      sherlockStatus(isThinking ? 'thinking' : 'idle');
+      URL.revokeObjectURL(url);
+    };
+    aud.play();
+  } catch(e) {
+    console.warn('Kokoro TTS error, falling back to Web Speech:', e);
+    if (activeSpeakBtn) { activeSpeakBtn.textContent = '🔊 Read aloud'; activeSpeakBtn = null; }
+    hideTTSBanner();
+    sherlockStatus('idle');
+    speakWebSpeech(text, btn);
+  }
+}
+
+function speakWebSpeech(text, btn) {
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    if (btn && btn === activeSpeakBtn) return;
+  }
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 1.05;
   const voices = window.speechSynthesis.getVoices();
   const v = voices.find(v => /Google|Neural|Samantha|Daniel|Karen/i.test(v.name));
   if (v) u.voice = v;
-
-  // Track which per-card button is active (may scroll out of view)
-  if (btn) {
-    activeSpeakBtn = btn;
-    btn.textContent = '⏹ Stop';
-  }
-
-  // Always show the persistent banner — visible regardless of scroll position
+  if (btn) { activeSpeakBtn = btn; btn.textContent = '⏹ Stop'; }
   showTTSBanner(text);
   sherlockStatus('speaking');
-
   u.onend = u.onerror = () => {
     if (activeSpeakBtn) { activeSpeakBtn.textContent = '🔊 Read aloud'; activeSpeakBtn = null; }
     hideTTSBanner();
     sherlockStatus(isThinking ? 'thinking' : 'idle');
   };
-
   window.speechSynthesis.speak(u);
 }
 
@@ -2345,6 +2825,10 @@ function endMeeting() {
   document.getElementById('setup').style.display = '';
   setStatus('', 'Ready');
   if (aiCards.filter(c => c.trigger !== 'error').length) showSummaryModal();
+  // Auto-email: open draft if enabled and there are members with emails
+  if (autoEmail && labMembers.some(m => m.email)) {
+    setTimeout(() => emailSummary(), 400); // small delay so modal opens first
+  }
 
   // Reset
   transcriptLog = [];
@@ -2572,97 +3056,6 @@ function notifyIfHidden(text, trigger) {
   } catch(e) { /* notifications blocked or denied */ }
 }
 
-// ── MID-MEETING SETTINGS ──────────────────────────────────────────────────
-let mtProvider = '';
-
-function openMeetingSettings() {
-  mtProvider = provider;
-  const modal = document.getElementById('settingsModal');
-  modal.style.display = 'flex';
-  document.getElementById('mtApiKey').value = apiKey;
-  document.getElementById('mtErr').style.display = 'none';
-  updateMtTabs();
-  updateMtLabel();
-}
-
-function closeMeetingSettings() {
-  document.getElementById('settingsModal').style.display = 'none';
-}
-
-function switchMeetingProvider(p) {
-  mtProvider = p;
-  // load saved key for the selected provider
-  try {
-    const saved = localStorage.getItem('sherlock_key_' + p);
-    document.getElementById('mtApiKey').value = (p === provider) ? apiKey : (saved || '');
-  } catch(e) { document.getElementById('mtApiKey').value = (p === provider) ? apiKey : ''; }
-  document.getElementById('mtErr').style.display = 'none';
-  updateMtTabs();
-  updateMtLabel();
-}
-
-function updateMtTabs() {
-  ['gemini','groq','anthropic'].forEach(p => {
-    const btn = document.getElementById('mtProv' + p.charAt(0).toUpperCase() + p.slice(1));
-    if (btn) btn.className = 'mt-tab' + (p === mtProvider ? ' active' : '');
-  });
-}
-
-function updateMtLabel() {
-  document.getElementById('mtKeyLabel').textContent = PROVIDERS[mtProvider]?.label || 'API Key';
-  document.getElementById('mtApiKey').placeholder   = PROVIDERS[mtProvider]?.placeholder || '';
-}
-
-async function testMeetingKey() {
-  const key   = document.getElementById('mtApiKey').value.trim();
-  const errEl = document.getElementById('mtErr');
-  if (!key) { errEl.textContent = 'Enter a key first'; errEl.style.color = 'var(--red)'; errEl.style.display = 'block'; return; }
-  errEl.textContent = 'Testing…'; errEl.style.color = 'var(--text-muted)'; errEl.style.display = 'block';
-  try {
-    if (mtProvider === 'groq') {
-      const res  = await fetch('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': 'Bearer ' + key } });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        const models = (data.data || []).filter(m => !m.id.includes('whisper') && !m.id.includes('tts')).map(m => m.id).join(', ');
-        errEl.textContent = '✅ Valid! Models: ' + models; errEl.style.color = 'var(--green)';
-      } else { errEl.textContent = '❌ HTTP ' + res.status + ': ' + (data.error?.message || ''); errEl.style.color = 'var(--red)'; }
-    } else if (mtProvider === 'gemini') {
-      const res  = await fetch('https://generativelanguage.googleapis.com/v1/models?key=' + key);
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) { errEl.textContent = '✅ Gemini key valid!'; errEl.style.color = 'var(--green)'; }
-      else { errEl.textContent = '❌ HTTP ' + res.status + ': ' + (data.error?.message || ''); errEl.style.color = 'var(--red)'; }
-    } else {
-      errEl.textContent = 'Anthropic: use Save & Continue to test during a meeting.';
-      errEl.style.color = 'var(--text-muted)';
-    }
-  } catch(e) { errEl.textContent = '❌ ' + e.message; errEl.style.color = 'var(--red)'; }
-}
-
-function saveMeetingSettings() {
-  const key = document.getElementById('mtApiKey').value.trim();
-  const cfg = PROVIDERS[mtProvider];
-  const errEl = document.getElementById('mtErr');
-  if (!key || !cfg.validate(key)) {
-    errEl.textContent = cfg.errMsg; errEl.style.color = 'var(--red)'; errEl.style.display = 'block'; return;
-  }
-  provider = mtProvider;
-  apiKey   = key;
-  try { localStorage.setItem('sherlock_key_' + provider, key); } catch(e) {}
-  closeMeetingSettings();
-  // Brief toast
-  const toast = document.createElement('div');
-  toast.textContent = '✅ Switched to ' + mtProvider.charAt(0).toUpperCase() + mtProvider.slice(1);
-  Object.assign(toast.style, {
-    position:'fixed', bottom:'80px', left:'50%', transform:'translateX(-50%)',
-    background:'var(--surface)', border:'1px solid var(--green)', color:'var(--green)',
-    padding:'8px 18px', borderRadius:'20px', fontSize:'13px', zIndex:'999',
-    pointerEvents:'none'
-  });
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2500);
-}
-
-
 // ── SAVED KEY HELPERS ─────────────────────────────────────────────────────
 function clearSavedKey() {
   try {
@@ -2680,17 +3073,46 @@ function clearSavedKey() {
   try {
     const lastProvider = localStorage.getItem('sherlock_last_provider');
     if (lastProvider && ['gemini','groq','anthropic'].includes(lastProvider)) {
-      selectProvider(lastProvider);
-      document.querySelectorAll('.tab-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.p === lastProvider);
-      });
+      setProvider(lastProvider);
+    }
+    const ae = localStorage.getItem('sherlock_autoemail');
+    if (ae !== null) {
+      autoEmail = ae !== '0';
+      const chk = document.getElementById('autoEmailChk');
+      if (chk) chk.checked = autoEmail;
     }
   } catch(e) {}
-  // render member list on setup screen
   labMembers = loadMembers();
   renderMemberList();
+  try { refreshEmailPreview(); } catch(e) {}
+  // Restore saved API keys
+  try {
+    const tk = localStorage.getItem('sherlock_tavily_key');
+    const tel = document.getElementById('tavilyKey');
+    if (tk && tel) tel.value = tk;
+    const sk = localStorage.getItem('sherlock_searchapi_key');
+    const sel = document.getElementById('searchApiKey');
+    if (sk && sel) sel.value = sk;
+  } catch(e) {}
 })();
 
 </script>
+
+<!-- ── QUOTA FALLBACK MODAL ─────────────────────────────────────────────── -->
+<div id="quotaModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);display:none;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-light);border-radius:16px;padding:28px 32px;max-width:420px;width:90%;box-shadow:var(--shadow);">
+    <div style="font-size:28px;margin-bottom:10px;">⚠️</div>
+    <div style="font-weight:600;font-size:17px;margin-bottom:6px;">API Quota Exceeded</div>
+    <div style="color:var(--text-muted);font-size:13px;margin-bottom:18px;" id="quotaModalMsg">Your Gemini key hit its daily limit.</div>
+    <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px;">Paste a Groq API key to continue (free at <a href="https://console.groq.com/keys" target="_blank" style="color:var(--accent)">console.groq.com/keys</a>):</label>
+    <input id="quotaKeyInput" type="password" placeholder="gsk_…" autocomplete="off"
+      style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border-light);background:var(--surface-2);color:var(--text);font-size:13px;margin-bottom:14px;outline:none;"
+      onkeydown="if(event.key==='Enter')submitQuotaKey()">
+    <div style="display:flex;gap:10px;">
+      <button onclick="submitQuotaKey()" style="flex:1;padding:9px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:14px;">Switch to Groq</button>
+      <button onclick="dismissQuotaModal()" style="padding:9px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;font-size:14px;">Skip turn</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
