@@ -1,0 +1,1420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sherlock — Reading Group AI</title>
+  <style>
+    :root {
+      --bg: #0c1220;
+      --surface: #161f30;
+      --surface-2: #1c2a3e;
+      --border: #2a3a52;
+      --border-light: #334560;
+      --text: #dce8f5;
+      --text-muted: #7a97b8;
+      --text-dim: #4a6a8a;
+      --accent: #4f8ef7;
+      --accent-dim: rgba(79,142,247,0.12);
+      --accent-border: rgba(79,142,247,0.25);
+      --ai: #f0a040;
+      --ai-dim: rgba(240,160,64,0.10);
+      --ai-border: rgba(240,160,64,0.22);
+      --green: #3dd68c;
+      --green-dim: rgba(61,214,140,0.12);
+      --red: #f06070;
+      --red-dim: rgba(240,96,112,0.12);
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── HEADER ─────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 12px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 15px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+    }
+
+    .logo-icon {
+      width: 28px; height: 28px;
+      background: var(--accent-dim);
+      border: 1px solid var(--accent-border);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      padding: 4px 11px;
+      background: var(--bg);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      flex-shrink: 0;
+    }
+    .dot.on   { background: var(--green); animation: glow 2s ease-in-out infinite; }
+    .dot.live { background: var(--red);   animation: glow 1s ease-in-out infinite; }
+
+    @keyframes glow {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── SETUP SCREEN ───────────────────────── */
+    #setup {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      overflow-y: auto;
+    }
+
+    .setup-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 520px;
+    }
+
+    .setup-card h2 {
+      font-size: 20px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+    }
+
+    .setup-card .subtitle {
+      color: var(--text-muted);
+      font-size: 13px;
+      margin-bottom: 28px;
+      line-height: 1.6;
+    }
+
+    .field { margin-bottom: 18px; }
+
+    .field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 7px;
+    }
+
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 9px 13px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus { border-color: var(--accent); }
+    input::placeholder { color: var(--text-dim); }
+
+    /* Paper tabs */
+    .tab-row {
+      display: flex;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 3px;
+      margin-bottom: 10px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 7px 12px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.15s;
+    }
+    .tab.active { background: var(--surface-2); color: var(--text); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .drop-zone {
+      border: 1.5px dashed var(--border);
+      border-radius: var(--radius-sm);
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.15s;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.over { border-color: var(--accent); background: var(--accent-dim); }
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .drop-zone-icon  { font-size: 24px; margin-bottom: 6px; }
+    .drop-zone-label { color: var(--text-muted); font-size: 12px; }
+    .drop-zone-file  { color: var(--accent); font-size: 12px; margin-top: 5px; }
+
+    .help-text { font-size: 11px; color: var(--text-dim); margin-top: 5px; }
+
+    .err { color: var(--red); font-size: 12px; margin-top: 6px; display: none; }
+
+    /* Sensitivity options */
+    .option-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    .opt-btn {
+      flex: 1;
+      padding: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-size: 11px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .opt-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+    .free-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: var(--green-dim);
+      color: var(--green);
+      border: 1px solid rgba(61,214,140,0.25);
+      border-radius: 3px;
+      padding: 1px 4px;
+      margin-left: 4px;
+      vertical-align: middle;
+    }
+
+    .btn-primary {
+      width: 100%;
+      margin-top: 6px;
+      padding: 11px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .btn-primary:hover { opacity: 0.88; }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── MEETING SCREEN ─────────────────────── */
+    #meeting {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #meeting.active { display: flex; }
+
+    .paper-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 18px;
+      background: var(--accent-dim);
+      border-bottom: 1px solid var(--accent-border);
+      font-size: 12px;
+      flex-shrink: 0;
+      min-height: 32px;
+    }
+
+    .paper-badge {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .paper-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+    }
+
+    .silence-indicator {
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--text-dim);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .layout {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      overflow: hidden;
+    }
+
+    /* ── TRANSCRIPT PANEL ───────────────────── */
+    .tx-panel {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    .panel-hdr {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .tx-feed {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .tx-entry {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 12px;
+    }
+
+    .tx-time { font-size: 10px; color: var(--text-dim); margin-bottom: 3px; }
+    .tx-text { font-size: 13px; color: var(--text); line-height: 1.55; }
+
+    .tx-interim {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 5px 12px;
+      border-left: 2px solid var(--border-light);
+      margin: 0 2px;
+    }
+
+    /* ── AI PANEL ───────────────────────────── */
+    .ai-panel {
+      display: flex;
+      flex-direction: column;
+      background: #090e1a;
+      overflow: hidden;
+    }
+
+    .ai-panel .panel-hdr { background: #090e1a; color: var(--ai); }
+
+    /* Cooldown bar */
+    .cooldown-rail {
+      height: 2px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .cooldown-fill {
+      height: 100%;
+      background: var(--ai);
+      width: 0%;
+    }
+
+    .ai-feed {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .ai-card {
+      background: var(--ai-dim);
+      border: 1px solid var(--ai-border);
+      border-radius: var(--radius-sm);
+      padding: 11px 13px;
+    }
+
+    .ai-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .ai-trigger {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--ai);
+    }
+
+    .ai-card-time { font-size: 10px; color: var(--text-dim); }
+
+    .ai-q {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-bottom: 6px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--ai-border);
+    }
+
+    .ai-text { font-size: 13px; line-height: 1.6; color: var(--text); }
+
+    .ai-speak {
+      margin-top: 7px;
+      padding: 3px 8px;
+      background: none;
+      border: 1px solid var(--ai-border);
+      border-radius: 4px;
+      color: var(--ai);
+      font-size: 10px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .ai-speak:hover { background: var(--ai-dim); }
+
+    .ai-thinking {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 13px;
+      color: var(--text-dim);
+      font-size: 12px;
+      font-style: italic;
+    }
+
+    .dots { display: flex; gap: 3px; }
+    .dots b {
+      width: 5px; height: 5px;
+      background: var(--ai);
+      border-radius: 50%;
+      animation: dot-blink 1.2s ease-in-out infinite;
+    }
+    .dots b:nth-child(2) { animation-delay: 0.2s; }
+    .dots b:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes dot-blink {
+      0%, 80%, 100% { opacity: 0.15; }
+      40%            { opacity: 1; }
+    }
+
+    /* ── CONTROLS BAR ───────────────────────── */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .mic-btn {
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-size: 17px;
+      cursor: pointer;
+      transition: all 0.2s;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .mic-btn.live {
+      background: var(--red);
+      animation: mic-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes mic-pulse {
+      0%   { box-shadow: 0 0 0 0   rgba(240,96,112,0.5); }
+      70%  { box-shadow: 0 0 0 9px rgba(240,96,112,0); }
+      100% { box-shadow: 0 0 0 0   rgba(240,96,112,0); }
+    }
+
+    .ask-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ask-prompt {
+      flex: 1;
+      padding: 9px 14px;
+      background: var(--ai-dim);
+      border: 1px solid var(--ai-border);
+      border-radius: var(--radius-sm);
+      color: var(--ai);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .ask-prompt:hover { background: rgba(240,160,64,0.16); }
+
+    .ask-input-wrap {
+      display: none;
+      flex: 1;
+      gap: 7px;
+    }
+    .ask-input-wrap.open { display: flex; }
+
+    .ask-input {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--ai-border);
+      border-radius: var(--radius-sm);
+      padding: 9px 13px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+    .ask-input:focus { border-color: var(--ai); }
+
+    .icon-btn {
+      width: 40px; height: 40px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .icon-btn.on { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+    .icon-btn.danger:hover { border-color: var(--red); color: var(--red); background: var(--red-dim); }
+
+    .send-btn {
+      padding: 8px 14px;
+      background: var(--ai);
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #0c0800;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .send-btn:hover { opacity: 0.88; }
+    .cancel-btn {
+      padding: 8px 10px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    /* ── EMPTY STATES ───────────────────────── */
+    .empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 32px 20px;
+      color: var(--text-dim);
+      gap: 8px;
+    }
+    .empty-icon { font-size: 28px; }
+    .empty p   { font-size: 12px; max-width: 200px; line-height: 1.5; }
+
+    /* ── SCROLLBAR ──────────────────────────── */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+    /* ── RESPONSIVE ─────────────────────────── */
+    @media (max-width: 680px) {
+      .layout {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 240px;
+      }
+      .tx-panel { border-right: none; border-bottom: 1px solid var(--border); }
+      .setup-card { padding: 24px 18px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🔍</div>
+    Sherlock
+  </div>
+  <div class="status-pill">
+    <div class="dot" id="dot"></div>
+    <span id="status-text">Ready</span>
+  </div>
+</header>
+
+<!-- ── SETUP SCREEN ────────────────────────── -->
+<div id="setup">
+  <div class="setup-card">
+    <h2>Set up Sherlock</h2>
+    <p class="subtitle">Your AI reading group member — has read the paper, listens to the discussion, and chips in when it has something worth saying. Say <strong style="color:var(--accent)">"Sherlock…"</strong> anytime to get its attention directly.</p>
+
+    <!-- Provider -->
+    <div class="field">
+      <label>AI Provider</label>
+      <div class="tab-row" id="providerRow">
+        <button class="tab active" onclick="setProvider('gemini')">✦ Gemini <span class="free-badge">Free</span></button>
+        <button class="tab" onclick="setProvider('groq')">⚡ Groq <span class="free-badge">Free</span></button>
+        <button class="tab" onclick="setProvider('anthropic')">◆ Anthropic</button>
+      </div>
+      <div id="providerHint" class="help-text"></div>
+    </div>
+
+    <!-- API Key -->
+    <div class="field">
+      <label id="keyLabel">API Key</label>
+      <input type="password" id="apiKey" placeholder="" autocomplete="off">
+      <div class="err" id="apiErr"></div>
+    </div>
+
+    <!-- Paper input -->
+    <div class="field">
+      <label>This Week's Paper — PDF</label>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" accept=".pdf" id="pdfFile" onchange="onFileSelect(this)">
+        <div class="drop-zone-icon">📄</div>
+        <div class="drop-zone-label">Drop PDF here or click to browse</div>
+        <div class="drop-zone-file" id="fileName"></div>
+      </div>
+      <div class="err" id="paperErr"></div>
+    </div>
+
+    <div class="field">
+      <label>Paper Title <span style="font-weight:400;opacity:.5">(optional — auto-filled from filename)</span></label>
+      <input type="text" id="paperTitleInput" placeholder="e.g. Gaussian Splatting for Real-Time 3D…">
+    </div>
+
+    <!-- AI sensitivity -->
+    <div class="field">
+      <label>How chatty should the AI be?</label>
+      <div class="option-row">
+        <button class="opt-btn" id="opt-quiet" onclick="setSensitivity('quiet')">🤐 Quiet<br><span style="font-size:10px;opacity:.6">Manual only</span></button>
+        <button class="opt-btn active" id="opt-balanced" onclick="setSensitivity('balanced')">🎯 Balanced<br><span style="font-size:10px;opacity:.6">Auto + manual</span></button>
+        <button class="opt-btn" id="opt-active" onclick="setSensitivity('active')">🗣 Active<br><span style="font-size:10px;opacity:.6">Speaks up often</span></button>
+      </div>
+    </div>
+
+    <div class="err" id="startErr"></div>
+    <button class="btn-primary" id="startBtn" onclick="startMeeting()">
+      <span id="startLabel">Start Meeting</span>
+    </button>
+  </div>
+</div>
+
+<!-- ── MEETING SCREEN ───────────────────────── -->
+<div id="meeting">
+  <div class="paper-bar">
+    <span class="paper-badge">📖 Paper</span>
+    <span class="paper-name" id="paperTitle">—</span>
+    <span class="silence-indicator" id="silenceDisplay"></span>
+  </div>
+
+  <div class="layout">
+
+    <!-- Transcript panel -->
+    <div class="tx-panel">
+      <div class="panel-hdr">🎙 Live Transcript</div>
+      <div class="tx-feed" id="txFeed">
+        <div class="empty">
+          <div class="empty-icon">🎙</div>
+          <p>Press the mic button to start listening to your meeting</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI panel -->
+    <div class="ai-panel">
+      <div class="panel-hdr" style="color:var(--ai)">✨ AI Member</div>
+      <div class="cooldown-rail"><div class="cooldown-fill" id="cooldownFill"></div></div>
+      <div class="ai-feed" id="aiFeed">
+        <div class="empty">
+          <div class="empty-icon">🤖</div>
+          <p>Listening. Say "Sherlock…" to get its attention, or it'll chime in on its own.</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <button class="mic-btn" id="micBtn" onclick="toggleMic()" title="Toggle listening">🎤</button>
+
+    <div class="ask-area">
+      <button class="ask-prompt" id="askPrompt" onclick="openAsk()">
+        <span>✨</span> Ask the AI a question…
+      </button>
+      <div class="ask-input-wrap" id="askWrap">
+        <input class="ask-input" id="askInput" placeholder="Ask anything about the paper…"
+          onkeydown="askKeydown(event)">
+        <button class="icon-btn" id="dictateBtn" onclick="toggleDictation()" title="Dictate your question">🎤</button>
+        <button class="send-btn" onclick="submitAsk()">Ask</button>
+        <button class="cancel-btn" onclick="closeAsk()">✕</button>
+      </div>
+    </div>
+
+    <button class="icon-btn" id="ttsBtn" onclick="toggleTTS()" title="Auto-read AI responses">🔇</button>
+    <button class="icon-btn" id="modeBtn" onclick="cycleSensitivity()" title="AI chattiness — click to cycle">🎯</button>
+    <button class="icon-btn danger" onclick="endMeeting()" title="End meeting">⏹</button>
+  </div>
+</div>
+
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+
+// ── PROVIDER CONFIG ───────────────────────────
+const PROVIDERS = {
+  gemini: {
+    label:       'Google Gemini API Key',
+    placeholder: 'Your Gemini API key…',
+    hint:        '✦ Free tier: 15 req/min, 1M-token context — perfect for long papers. Get a key at <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent)">aistudio.google.com/apikey</a>',
+    validate:    k => k.length > 8,
+    errMsg:      'Please enter your Gemini API key'
+  },
+  groq: {
+    label:       'Groq API Key',
+    placeholder: 'gsk_…',
+    hint:        '⚡ Free tier: very fast Llama 3.3 70B inference. Get a key at <a href="https://console.groq.com/keys" target="_blank" style="color:var(--accent)">console.groq.com/keys</a>',
+    validate:    k => k.length > 8,
+    errMsg:      'Please enter your Groq API key'
+  },
+  anthropic: {
+    label:       'Anthropic API Key',
+    placeholder: 'sk-ant-api…',
+    hint:        '◆ Paid (Claude Sonnet/Opus). Get a key at <a href="https://console.anthropic.com/keys" target="_blank" style="color:var(--accent)">console.anthropic.com/keys</a>',
+    validate:    k => k.startsWith('sk-ant'),
+    errMsg:      'Anthropic keys start with "sk-ant-" — get one at console.anthropic.com/keys'
+  }
+};
+
+// ── CONSTANTS ─────────────────────────────────
+const COOLDOWNS = {
+  quiet:    { silence: 99999999, uncertainty: 99999999, autoInterval: 99999999 },
+  balanced: { silence: 12000,    uncertainty: 4000,     autoInterval: 150000  },
+  active:   { silence: 7000,     uncertainty: 2500,     autoInterval: 80000   }
+};
+const UNCERTAINTY_PHRASES = [
+  "not sure", "i'm not sure", "i think", "i believe", "maybe", "could be",
+  "was it", "is that right", "correct me if", "remind me", "what does", "does anyone",
+  "can anyone", "i forgot", "i don't remember", "?"
+];
+const MAX_PAPER_CHARS = 70000;
+const MIN_MANUAL_INTERVAL = 5000; // 5 s between manual asks
+const MODELS = ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-3-5-sonnet-20241022'];
+
+// ── STATE ─────────────────────────────────────
+let apiKey       = '';
+let provider     = 'gemini';
+let paperText    = '';
+let paperTitle_  = '';
+let sensitivity  = 'balanced';
+
+let recognition  = null;
+let isListening  = false;
+let transcriptLog= [];
+let interimEl    = null;
+
+let lastSpeech   = 0;
+let lastAIAuto   = 0;
+let lastManual   = 0;
+let isThinking   = false;
+let ttsOn        = false;
+let silenceTimer = null;
+let silenceTick  = null;
+let cooldownRAF  = null;
+let dictationSR  = null;
+let isDictating  = false;
+
+// ── PDF.js SETUP ──────────────────────────────
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
+// ── PROVIDER UI ───────────────────────────────
+function setProvider(p) {
+  provider = p;
+  const cfg = PROVIDERS[p];
+  document.getElementById('keyLabel').textContent   = cfg.label;
+  document.getElementById('apiKey').placeholder     = cfg.placeholder;
+  document.getElementById('providerHint').innerHTML = cfg.hint;
+  document.getElementById('apiKey').value           = '';
+  document.getElementById('apiErr').style.display   = 'none';
+  document.querySelectorAll('#providerRow .tab').forEach((b, i) =>
+    b.classList.toggle('active', ['gemini','groq','anthropic'][i] === p));
+}
+// Init hint on load
+setTimeout(() => setProvider('gemini'), 0);
+
+// ── SETUP UI ─────────────────────────────────
+const SENSITIVITY_ICONS  = { quiet: '🤐', balanced: '🎯', active: '🗣' };
+const SENSITIVITY_LABELS = { quiet: 'Quiet — manual only', balanced: 'Balanced', active: 'Active — speaks up often' };
+
+function setSensitivity(s) {
+  sensitivity = s;
+  ['quiet','balanced','active'].forEach(k => {
+    document.getElementById('opt-' + k)?.classList.toggle('active', k === s);
+  });
+  const btn = document.getElementById('modeBtn');
+  if (btn) {
+    btn.textContent = SENSITIVITY_ICONS[s];
+    btn.title = SENSITIVITY_LABELS[s] + ' — click to change';
+  }
+}
+
+function cycleSensitivity() {
+  const order = ['quiet', 'balanced', 'active'];
+  setSensitivity(order[(order.indexOf(sensitivity) + 1) % 3]);
+  // Brief flash to confirm change
+  const btn = document.getElementById('modeBtn');
+  btn.style.borderColor = 'var(--accent)';
+  btn.style.color = 'var(--accent)';
+  setTimeout(() => { btn.style.borderColor = ''; btn.style.color = ''; }, 600);
+}
+
+function onFileSelect(input) {
+  const f = input.files[0];
+  document.getElementById('fileName').textContent = f ? '✓ ' + f.name : '';
+}
+
+// Drag-drop
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type === 'application/pdf') {
+    document.getElementById('pdfFile').files = e.dataTransfer.files;
+    document.getElementById('fileName').textContent = '✓ ' + f.name;
+  }
+});
+
+// ── PAPER LOADING ─────────────────────────────
+async function extractPDF(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let text = '';
+  const pages = Math.min(pdf.numPages, 40);
+  for (let i = 1; i <= pages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(it => it.str).join(' ') + '\n\n';
+  }
+  return text;
+}
+
+// ── START MEETING ─────────────────────────────
+async function startMeeting() {
+  const key = document.getElementById('apiKey').value.trim();
+  const cfg = PROVIDERS[provider];
+  if (!cfg.validate(key)) {
+    showErr('apiErr', cfg.errMsg);
+    return;
+  }
+  apiKey = key;
+
+  const btn = document.getElementById('startBtn');
+  const lbl = document.getElementById('startLabel');
+  btn.disabled = true; lbl.textContent = 'Loading paper…';
+
+  try {
+    const file = document.getElementById('pdfFile').files[0];
+    if (!file) { showErr('paperErr', 'Please select a PDF file'); btn.disabled = false; lbl.textContent = 'Start Meeting'; return; }
+    lbl.textContent = 'Extracting text…';
+    paperText   = await extractPDF(file);
+    const customTitle = document.getElementById('paperTitleInput').value.trim();
+    paperTitle_ = customTitle || file.name.replace(/\.pdf$/i, '');
+  } catch (e) {
+    showErr('paperErr', e.message);
+    btn.disabled = false; lbl.textContent = 'Start Meeting';
+    return;
+  }
+
+  // Truncate if needed
+  if (paperText.length > MAX_PAPER_CHARS)
+    paperText = paperText.slice(0, MAX_PAPER_CHARS) + '\n\n[… paper truncated …]';
+
+  // Switch screens
+  document.getElementById('setup').style.display = 'none';
+  const meetEl = document.getElementById('meeting');
+  meetEl.classList.add('active');
+  document.getElementById('paperTitle').textContent = paperTitle_;
+  setStatus('on', 'Ready — press 🎤');
+  btn.disabled = false; lbl.textContent = 'Start Meeting';
+}
+
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg; el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 6000);
+}
+
+// ── SPEECH RECOGNITION ────────────────────────
+function initSR() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert('Speech recognition requires Chrome or Edge.'); return false; }
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  recognition.onresult = onSpeechResult;
+  recognition.onerror  = e => { if (e.error !== 'no-speech') console.warn('SR:', e.error); };
+  recognition.onend    = () => { if (isListening && !isDictating) setTimeout(() => recognition.start(), 200); };
+  return true;
+}
+
+function onSpeechResult(event) {
+  let final = '', interim = '';
+  for (let i = event.resultIndex; i < event.results.length; i++) {
+    if (event.results[i].isFinal) final += event.results[i][0].transcript;
+    else interim += event.results[i][0].transcript;
+  }
+  if (final.trim()) {
+    addTx(final.trim());
+    lastSpeech = Date.now();
+    maybeDetectWakeWord(final);
+    maybeDetectUncertainty(final);
+    resetSilenceTimer();
+  }
+  updateInterim(interim);
+}
+
+function addTx(text) {
+  transcriptLog.push({ text, t: Date.now() });
+  const feed = document.getElementById('txFeed');
+  removeEmpty(feed);
+  if (interimEl) { interimEl.remove(); interimEl = null; }
+
+  const el = document.createElement('div');
+  el.className = 'tx-entry';
+  el.innerHTML = `<div class="tx-time">${fmtTime(Date.now())}</div>
+                  <div class="tx-text">${esc(text)}</div>`;
+  feed.appendChild(el);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function updateInterim(text) {
+  const feed = document.getElementById('txFeed');
+  if (text.trim()) {
+    if (!interimEl) {
+      interimEl = document.createElement('div');
+      interimEl.className = 'tx-interim';
+      feed.appendChild(interimEl);
+    }
+    interimEl.textContent = text;
+    feed.scrollTop = feed.scrollHeight;
+  } else if (interimEl) {
+    interimEl.remove(); interimEl = null;
+  }
+}
+
+function toggleMic() {
+  if (!isListening) {
+    if (!recognition && !initSR()) return;
+    recognition.start();
+    isListening = true;
+    lastSpeech = Date.now();
+    document.getElementById('micBtn').classList.add('live');
+    document.getElementById('micBtn').textContent = '🔴';
+    setStatus('live', 'Listening');
+    startSilenceTick();
+  } else {
+    recognition.stop();
+    isListening = false;
+    document.getElementById('micBtn').classList.remove('live');
+    document.getElementById('micBtn').textContent = '🎤';
+    setStatus('on', 'Paused');
+    stopSilenceTick();
+  }
+}
+
+// ── SILENCE DETECTION ─────────────────────────
+function resetSilenceTimer() {
+  clearTimeout(silenceTimer);
+  const t = COOLDOWNS[sensitivity].silence;
+  silenceTimer = setTimeout(() => {
+    if (isListening && canAutoIntervene()) triggerAI('pause', null);
+  }, t);
+}
+
+function startSilenceTick() {
+  silenceTick = setInterval(() => {
+    if (!isListening) return;
+    const s = Math.floor((Date.now() - lastSpeech) / 1000);
+    document.getElementById('silenceDisplay').textContent =
+      s > 3 ? `Silence: ${s}s` : '';
+  }, 500);
+}
+
+function stopSilenceTick() {
+  clearInterval(silenceTick);
+  document.getElementById('silenceDisplay').textContent = '';
+}
+
+// ── WAKE WORD DETECTION ───────────────────────
+function maybeDetectWakeWord(text) {
+  if (!/\bsherlock\b/i.test(text)) return;
+  // Give them ~1.5 s to finish their sentence, then respond
+  setTimeout(() => {
+    if (!isThinking) triggerAI('wakeword', null);
+  }, 1500);
+}
+
+// ── UNCERTAINTY DETECTION ─────────────────────
+function maybeDetectUncertainty(text) {
+  if (!canAutoIntervene()) return;
+  const lower = text.toLowerCase();
+  const hit   = UNCERTAINTY_PHRASES.some(p => lower.includes(p));
+  if (hit) {
+    setTimeout(() => {
+      if (canAutoIntervene()) triggerAI('uncertainty', null);
+    }, COOLDOWNS[sensitivity].uncertainty);
+  }
+}
+
+// ── AI TRIGGER LOGIC ──────────────────────────
+function canAutoIntervene() {
+  if (isThinking) return false;
+  if (Date.now() - lastAIAuto < COOLDOWNS[sensitivity].autoInterval) return false;
+  return true;
+}
+
+function getContext(ms = 200000) {
+  return transcriptLog
+    .filter(e => Date.now() - e.t < ms)
+    .map(e => e.text).join(' ').trim();
+}
+
+async function triggerAI(trigger, question) {
+  if (isThinking) return;
+  isThinking = true;
+  showThinking();
+
+  const ctx = getContext();
+
+  let userMsg;
+  if (question) {
+    userMsg = `A group member is directly asking you: "${question}"\n\nAnswer helpfully and concisely (2–4 sentences). Be specific to the paper.`;
+  } else if (trigger === 'wakeword') {
+    userMsg = `Someone just called your name — "Sherlock". Here's what they said:\n\n"${ctx}"\n\nRespond directly and helpfully to whatever they asked or raised. 2–4 sentences max. Be specific to the paper.`;
+  } else if (trigger === 'uncertainty') {
+    userMsg = `Someone in the group expressed uncertainty or asked a question. Here's the recent discussion:\n\n"${ctx}"\n\nIf you can genuinely clarify something from the paper, do so briefly. If not, respond with exactly: NO_CONTRIBUTION`;
+  } else {
+    userMsg = `The discussion just paused. Recent conversation:\n\n"${ctx || '(no transcript yet)'}"\n\nShould you add something? Consider: a detail they missed, a connection to related work, a question that sparks discussion, a caveat to a claim. Only if it's genuinely valuable. If not, respond with exactly: NO_CONTRIBUTION`;
+  }
+
+  try {
+    const text = await callClaude(userMsg);
+    if (text && text !== 'NO_CONTRIBUTION' && !text.startsWith('NO_CONTRIBUTION')) {
+      if (!question) lastAIAuto = Date.now();
+      addAICard(text, trigger, question);
+      if (ttsOn) speak(text);
+      animateCooldown();
+    }
+  } catch (e) {
+    addAICard('⚠️ API error: ' + e.message, 'error', question);
+  }
+
+  hideThinking();
+  isThinking = false;
+}
+
+async function callClaude(userMsg) {
+  if (provider === 'gemini')    return callGemini(userMsg);
+  if (provider === 'groq')      return callGroq(userMsg);
+  return callAnthropic(userMsg);
+}
+
+async function callGemini(userMsg) {
+  const sys = buildSystem();
+  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: sys }] },
+      contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+      generationConfig: { maxOutputTokens: 350, temperature: 0.7 }
+    })
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error?.message || `Gemini HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'NO_CONTRIBUTION';
+}
+
+async function callGroq(userMsg) {
+  const sys = buildSystem();
+  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'content-type':  'application/json'
+    },
+    body: JSON.stringify({
+      model:      'meta-llama/llama-4-maverick-17b-128e-instruct',
+      max_tokens: 350,
+      messages:   [
+        { role: 'system', content: sys },
+        { role: 'user',   content: userMsg }
+      ]
+    })
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    const msg = e.error?.message || JSON.stringify(e) || `Groq HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return (await res.json()).choices[0].message.content.trim();
+}
+
+async function callAnthropic(userMsg) {
+  const sys = buildSystem();
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key':                         apiKey,
+      'anthropic-version':                 '2023-06-01',
+      'content-type':                      'application/json',
+      'anthropic-dangerous-allow-browser': 'true'
+    },
+    body: JSON.stringify({
+      model:      'claude-opus-4-5',
+      max_tokens: 350,
+      system:     sys,
+      messages:   [{ role: 'user', content: userMsg }]
+    })
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error?.message || `Anthropic HTTP ${res.status}`);
+  }
+  return (await res.json()).content[0].text.trim();
+}
+
+function buildSystem() {
+  const paper = paperText.length > MAX_PAPER_CHARS
+    ? paperText.slice(0, MAX_PAPER_CHARS) + '\n\n[truncated]'
+    : paperText;
+
+  return `You are Sherlock, a well-prepared PhD student in a reading group on 3D vision and computer graphics at the University of Maryland (Matthias Zwicker's lab). You have thoroughly read this week's paper and are attending as a peer — not a professor, not an assistant. When someone calls your name, respond directly to what they asked.
+
+===PAPER===
+${paper}
+===END PAPER===
+
+Your job:
+• Correct factual errors or misconceptions about the paper
+• Clarify uncertain details when someone doesn't remember exactly
+• Point out interesting things the group missed or hasn't discussed yet
+• Add connections to related work when relevant
+• Pose a thought-provoking question when discussion stalls
+• Be conversational and peer-like — "I think...", "Actually...", "One thing I found interesting...", "Worth noting..."
+• Keep every contribution to 1–4 sentences. No bullet lists. No preamble.
+• If you have nothing genuinely new to add, respond with exactly: NO_CONTRIBUTION
+
+You are a respectful peer. Every word you say should earn its place.`;
+}
+
+// ── AI CARD UI ────────────────────────────────
+function addAICard(text, trigger, question) {
+  const feed = document.getElementById('aiFeed');
+  removeEmpty(feed);
+
+  const labels = {
+    pause: '💬 Discussion',
+    uncertainty: '📌 Clarification',
+    wakeword: '🔍 Sherlock',
+    manual: '❓ Q&A',
+    error: '⚠️ Error'
+  };
+
+  const card = document.createElement('div');
+  card.className = 'ai-card';
+  card.innerHTML = `
+    <div class="ai-card-header">
+      <span class="ai-trigger">${labels[trigger] || '✨ Insight'}</span>
+      <span class="ai-card-time">${fmtTime(Date.now())}</span>
+    </div>
+    ${question ? `<div class="ai-q">Q: ${esc(question)}</div>` : ''}
+    <div class="ai-text">${esc(text)}</div>
+    <button class="ai-speak" onclick='speak(${JSON.stringify(text)}, this)'>🔊 Read aloud</button>
+  `;
+  feed.appendChild(card);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function showThinking() {
+  const feed = document.getElementById('aiFeed');
+  const el = document.createElement('div');
+  el.className = 'ai-thinking'; el.id = 'aiThink';
+  el.innerHTML = 'Thinking <div class="dots"><b></b><b></b><b></b></div>';
+  feed.appendChild(el);
+  feed.scrollTop = feed.scrollHeight;
+}
+function hideThinking() { document.getElementById('aiThink')?.remove(); }
+
+function animateCooldown() {
+  cancelAnimationFrame(cooldownRAF);
+  const fill  = document.getElementById('cooldownFill');
+  const total = COOLDOWNS[sensitivity].autoInterval;
+  const start = Date.now();
+  const step  = () => {
+    const p = Math.min(100, ((Date.now() - start) / total) * 100);
+    fill.style.width = p + '%';
+    if (p < 100) cooldownRAF = requestAnimationFrame(step);
+    else fill.style.width = '0%';
+  };
+  requestAnimationFrame(step);
+}
+
+// ── DICTATION ─────────────────────────────────
+function toggleDictation() {
+  isDictating ? stopDictation() : startDictation();
+}
+
+function startDictation() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+
+  // Pause main recognition so they don't fight over the mic
+  if (isListening && recognition) recognition.stop();
+
+  isDictating = true;
+  dictationSR = new SR();
+  dictationSR.continuous    = false;
+  dictationSR.interimResults = true;
+  dictationSR.lang = 'en-US';
+
+  const input = document.getElementById('askInput');
+  const btn   = document.getElementById('dictateBtn');
+  btn.textContent = '🔴'; btn.classList.add('live');
+  input.placeholder = 'Speak your question…';
+
+  dictationSR.onresult = e => {
+    let text = '';
+    for (let i = 0; i < e.results.length; i++) text += e.results[i][0].transcript;
+    input.value = text;
+  };
+
+  dictationSR.onend = () => {
+    isDictating = false;
+    btn.textContent = '🎤'; btn.classList.remove('live');
+    input.placeholder = 'Ask anything about the paper…';
+    // Resume main recognition if it was listening
+    if (isListening && recognition) setTimeout(() => recognition.start(), 200);
+  };
+
+  dictationSR.start();
+  input.focus();
+}
+
+function stopDictation() {
+  dictationSR?.stop();
+}
+
+// ── MANUAL ASK ────────────────────────────────
+function openAsk() {
+  document.getElementById('askPrompt').style.display = 'none';
+  document.getElementById('askWrap').classList.add('open');
+  document.getElementById('askInput').focus();
+}
+function closeAsk() {
+  stopDictation();
+  document.getElementById('askPrompt').style.display = '';
+  document.getElementById('askWrap').classList.remove('open');
+  document.getElementById('askInput').value = '';
+}
+function askKeydown(e) {
+  if (e.key === 'Enter') submitAsk();
+  if (e.key === 'Escape') closeAsk();
+}
+function submitAsk() {
+  const q = document.getElementById('askInput').value.trim();
+  if (!q) return;
+  if (Date.now() - lastManual < MIN_MANUAL_INTERVAL) return;
+  lastManual = Date.now();
+  closeAsk();
+  triggerAI('manual', q);
+}
+
+// ── TTS ──────────────────────────────────────
+let activeSpeakBtn = null;
+
+function toggleTTS() {
+  ttsOn = !ttsOn;
+  const btn = document.getElementById('ttsBtn');
+  btn.textContent = ttsOn ? '🔊' : '🔇';
+  btn.classList.toggle('on', ttsOn);
+}
+
+function speak(text, btn) {
+  // If already speaking, stop (toggle off)
+  if (window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    // onend will reset activeSpeakBtn; if same button was clicked, we're done
+    if (btn && btn === activeSpeakBtn) return;
+  }
+
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.05;
+  const voices = window.speechSynthesis.getVoices();
+  const v = voices.find(v => /Google|Neural|Samantha|Daniel|Karen/i.test(v.name));
+  if (v) u.voice = v;
+
+  if (btn) {
+    activeSpeakBtn = btn;
+    btn.textContent = '⏹ Stop reading';
+  }
+
+  u.onend = u.onerror = () => {
+    if (activeSpeakBtn) { activeSpeakBtn.textContent = '🔊 Read aloud'; activeSpeakBtn = null; }
+  };
+
+  window.speechSynthesis.speak(u);
+}
+
+// ── END MEETING ───────────────────────────────
+function endMeeting() {
+  if (!confirm('End the meeting session?')) return;
+  if (recognition) recognition.stop();
+  isListening = false; isThinking = false;
+  stopSilenceTick(); clearTimeout(silenceTimer); cancelAnimationFrame(cooldownRAF);
+
+  document.getElementById('meeting').classList.remove('active');
+  document.getElementById('setup').style.display = '';
+  setStatus('', 'Ready');
+
+  // Reset
+  transcriptLog = [];
+  interimEl = null;
+  document.getElementById('txFeed').innerHTML =
+    '<div class="empty"><div class="empty-icon">🎙</div><p>Press the mic button to start listening to your meeting</p></div>';
+  document.getElementById('aiFeed').innerHTML =
+    '<div class="empty"><div class="empty-icon">🤖</div><p>Listening. Will chime in when it has something worth saying.</p></div>';
+  document.getElementById('micBtn').classList.remove('live');
+  document.getElementById('micBtn').textContent = '🎤';
+  document.getElementById('cooldownFill').style.width = '0%';
+  document.getElementById('silenceDisplay').textContent = '';
+}
+
+// ── UTILS ─────────────────────────────────────
+function setStatus(type, text) {
+  document.getElementById('dot').className = 'dot' + (type ? ' ' + type : '');
+  document.getElementById('status-text').textContent = text;
+}
+
+function fmtTime(ts) {
+  return new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+function esc(t) {
+  const d = document.createElement('div');
+  d.appendChild(document.createTextNode(t));
+  return d.innerHTML;
+}
+
+function removeEmpty(feed) {
+  feed.querySelector('.empty')?.remove();
+}
+
+// Warm up voice list
+window.speechSynthesis.getVoices();
+window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+
+</script>
+</body>
+</html>
