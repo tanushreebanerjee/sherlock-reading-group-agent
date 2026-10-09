@@ -326,7 +326,7 @@
     .layout {
       flex: 1;
       display: grid;
-      grid-template-columns: 1fr 360px;
+      grid-template-columns: 340px 1fr;
       overflow: hidden;
     }
 
@@ -2963,97 +2963,6 @@ function notifyIfHidden(text, trigger) {
     n.onclick = () => { window.focus(); n.close(); };
   } catch(e) { /* notifications blocked or denied */ }
 }
-
-// ── MID-MEETING SETTINGS ──────────────────────────────────────────────────
-let mtProvider = '';
-
-function openMeetingSettings() {
-  mtProvider = provider;
-  const modal = document.getElementById('settingsModal');
-  modal.style.display = 'flex';
-  document.getElementById('mtApiKey').value = apiKey;
-  document.getElementById('mtErr').style.display = 'none';
-  updateMtTabs();
-  updateMtLabel();
-}
-
-function closeMeetingSettings() {
-  document.getElementById('settingsModal').style.display = 'none';
-}
-
-function switchMeetingProvider(p) {
-  mtProvider = p;
-  // load saved key for the selected provider
-  try {
-    const saved = localStorage.getItem('sherlock_key_' + p);
-    document.getElementById('mtApiKey').value = (p === provider) ? apiKey : (saved || '');
-  } catch(e) { document.getElementById('mtApiKey').value = (p === provider) ? apiKey : ''; }
-  document.getElementById('mtErr').style.display = 'none';
-  updateMtTabs();
-  updateMtLabel();
-}
-
-function updateMtTabs() {
-  ['gemini','groq','anthropic'].forEach(p => {
-    const btn = document.getElementById('mtProv' + p.charAt(0).toUpperCase() + p.slice(1));
-    if (btn) btn.className = 'mt-tab' + (p === mtProvider ? ' active' : '');
-  });
-}
-
-function updateMtLabel() {
-  document.getElementById('mtKeyLabel').textContent = PROVIDERS[mtProvider]?.label || 'API Key';
-  document.getElementById('mtApiKey').placeholder   = PROVIDERS[mtProvider]?.placeholder || '';
-}
-
-async function testMeetingKey() {
-  const key   = document.getElementById('mtApiKey').value.trim();
-  const errEl = document.getElementById('mtErr');
-  if (!key) { errEl.textContent = 'Enter a key first'; errEl.style.color = 'var(--red)'; errEl.style.display = 'block'; return; }
-  errEl.textContent = 'Testing…'; errEl.style.color = 'var(--text-muted)'; errEl.style.display = 'block';
-  try {
-    if (mtProvider === 'groq') {
-      const res  = await fetch('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': 'Bearer ' + key } });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) {
-        const models = (data.data || []).filter(m => !m.id.includes('whisper') && !m.id.includes('tts')).map(m => m.id).join(', ');
-        errEl.textContent = '✅ Valid! Models: ' + models; errEl.style.color = 'var(--green)';
-      } else { errEl.textContent = '❌ HTTP ' + res.status + ': ' + (data.error?.message || ''); errEl.style.color = 'var(--red)'; }
-    } else if (mtProvider === 'gemini') {
-      const res  = await fetch('https://generativelanguage.googleapis.com/v1/models?key=' + key);
-      const data = await res.json().catch(() => ({}));
-      if (res.ok) { errEl.textContent = '✅ Gemini key valid!'; errEl.style.color = 'var(--green)'; }
-      else { errEl.textContent = '❌ HTTP ' + res.status + ': ' + (data.error?.message || ''); errEl.style.color = 'var(--red)'; }
-    } else {
-      errEl.textContent = 'Anthropic: use Save & Continue to test during a meeting.';
-      errEl.style.color = 'var(--text-muted)';
-    }
-  } catch(e) { errEl.textContent = '❌ ' + e.message; errEl.style.color = 'var(--red)'; }
-}
-
-function saveMeetingSettings() {
-  const key = document.getElementById('mtApiKey').value.trim();
-  const cfg = PROVIDERS[mtProvider];
-  const errEl = document.getElementById('mtErr');
-  if (!key || !cfg.validate(key)) {
-    errEl.textContent = cfg.errMsg; errEl.style.color = 'var(--red)'; errEl.style.display = 'block'; return;
-  }
-  provider = mtProvider;
-  apiKey   = key;
-  try { localStorage.setItem('sherlock_key_' + provider, key); } catch(e) {}
-  closeMeetingSettings();
-  // Brief toast
-  const toast = document.createElement('div');
-  toast.textContent = '✅ Switched to ' + mtProvider.charAt(0).toUpperCase() + mtProvider.slice(1);
-  Object.assign(toast.style, {
-    position:'fixed', bottom:'80px', left:'50%', transform:'translateX(-50%)',
-    background:'var(--surface)', border:'1px solid var(--green)', color:'var(--green)',
-    padding:'8px 18px', borderRadius:'20px', fontSize:'13px', zIndex:'999',
-    pointerEvents:'none'
-  });
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2500);
-}
-
 
 // ── SAVED KEY HELPERS ─────────────────────────────────────────────────────
 function clearSavedKey() {
