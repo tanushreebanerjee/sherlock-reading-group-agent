@@ -3,7 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sherlock — Reading Group AI</title>
+  <title>Sherlock — AI Reading Group Assistant | Zwicker Lab, UMD</title>
+  <meta name="description" content="Sherlock is an AI reading group assistant for academic paper discussions. It listens to your group, has read the paper, and chips in with insights, clarifications, and questions — powered by Gemini, Groq, or Claude.">
+  <meta name="keywords" content="reading group AI, academic paper discussion, research assistant, Zwicker Lab, UMD, computer science, AI meeting assistant">
+  <meta name="author" content="Zwicker Lab, University of Maryland">
+  <meta property="og:title" content="Sherlock — AI Reading Group Assistant">
+  <meta property="og:description" content="Your AI peer for academic paper discussions. Drop in a PDF, start the meeting, and Sherlock listens, responds to its name, and helps your group dive deeper into the paper.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="https://img.icons8.com/emoji/256/detective.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Sherlock — AI Reading Group Assistant">
+  <meta name="twitter:description" content="Drop in a PDF. Start the meeting. Say 'Sherlock' to get its attention.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%8D%3C/text%3E%3C/svg%3E">
   <style>
     :root {
       --bg: #0c1220;
@@ -615,6 +626,43 @@
       .tx-panel { border-right: none; border-bottom: 1px solid var(--border); }
       .setup-card { padding: 24px 18px; }
     }
+
+    .mt-tab {
+      padding: 5px 13px; font-size: 12px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text-muted); cursor: pointer; transition: all .15s;
+    }
+    .mt-tab.active {
+      background: var(--accent-dim); border-color: var(--accent);
+      color: var(--accent); font-weight: 600;
+    }
+
+    .speaker-chip {
+      font-size: 11px; padding: 3px 9px; border-radius: 12px;
+      border: 1px solid var(--border); background: transparent;
+      color: var(--text-muted); cursor: pointer; transition: all .12s;
+      white-space: nowrap;
+    }
+    .speaker-chip.active {
+      background: var(--accent-dim); border-color: var(--accent);
+      color: var(--accent); font-weight: 600;
+    }
+    .member-row {
+      display: flex; align-items: center; gap: 8px; font-size: 12px;
+      padding: 4px 8px; background: var(--surface-2);
+      border-radius: var(--radius-sm);
+    }
+    .member-row span { flex: 1; color: var(--text); }
+    .member-row small { color: var(--text-dim); }
+    .ai-star {
+      background: none; border: none; cursor: pointer; font-size: 15px;
+      padding: 0 4px; opacity: 0.5; transition: opacity .15s;
+    }
+    .ai-star:hover, .ai-star.starred { opacity: 1; }
+    .tx-speaker {
+      font-size: 10px; font-weight: 600; color: var(--accent);
+      margin-bottom: 1px; text-transform: uppercase; letter-spacing: .04em;
+    }
   </style>
 </head>
 <body>
@@ -653,7 +701,16 @@
       <label id="keyLabel">API Key</label>
       <input type="password" id="apiKey" placeholder="" autocomplete="off">
       <div class="err" id="apiErr"></div>
+      <button type="button" onclick="clearSavedKey()" id="clearKeyBtn" style="margin-top:6px;padding:5px 12px;font-size:12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-dim);cursor:pointer;" title="Remove saved key for this provider" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-dim)'">🗑 Clear saved</button>
       <button type="button" onclick="testApiKey()" style="margin-top:6px;padding:5px 12px;font-size:12px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);cursor:pointer;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">Test Key</button>
+    </div>
+
+    <!-- Model select -->
+    <div class="field" id="modelField">
+      <label>Model <span style="font-weight:400;opacity:.5">(auto-selects best for provider)</span></label>
+      <select id="modelSelect" onchange="selectedModel = this.value"
+        style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-size:13px;outline:none;cursor:pointer;">
+      </select>
     </div>
 
     <!-- Paper input -->
@@ -683,6 +740,37 @@
       </div>
     </div>
 
+
+    <!-- Wake word -->
+    <div class="field">
+      <label>Wake Word <span style="font-weight:400;opacity:.5">(say this to get Sherlock's attention)</span></label>
+      <input type="text" id="wakeWordInput" value="Sherlock" placeholder="Sherlock"
+        style="font-size:13px;text-transform:capitalize;">
+    </div>
+
+    <!-- Seed questions -->
+    <div class="field">
+      <label>Seed Questions <span style="font-weight:400;opacity:.5">(optional — Sherlock uses these during lulls)</span></label>
+      <textarea id="seedQsInput" rows="3" placeholder="One question per line, e.g.&#10;What is the key contribution?&#10;What are the main limitations?"
+        style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-size:13px;resize:vertical;outline:none;"></textarea>
+    </div>
+
+    <!-- Lab members -->
+    <details id="membersDetails" style="margin-bottom:0;">
+      <summary style="font-size:13px;font-weight:600;color:var(--text-muted);cursor:pointer;padding:2px 0;list-style:none;display:flex;align-items:center;gap:6px;">
+        <span>👥</span> Attendees / Speaker Labels
+        <span style="font-weight:400;opacity:.5;font-size:11px;">(click to expand)</span>
+      </summary>
+      <div style="margin-top:10px;">
+        <div id="memberList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:6px;">
+          <input type="text"  id="newMemberName"  placeholder="Name"  style="flex:1;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 9px;color:var(--text);font-size:12px;outline:none;">
+          <input type="email" id="newMemberEmail" placeholder="email@umd.edu" style="flex:1.4;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 9px;color:var(--text);font-size:12px;outline:none;">
+          <button onclick="addMember()" style="padding:6px 13px;font-size:12px;background:var(--accent-dim);border:1px solid var(--accent-border);border-radius:var(--radius-sm);color:var(--accent);cursor:pointer;">+ Add</button>
+        </div>
+      </div>
+    </details>
+
     <div class="err" id="startErr"></div>
     <button class="btn-primary" id="startBtn" onclick="startMeeting()">
       <span id="startLabel">Start Meeting</span>
@@ -695,7 +783,22 @@
   <div class="paper-bar">
     <span class="paper-badge">📖 Paper</span>
     <span class="paper-name" id="paperTitle">—</span>
+    <label title="Add a second paper (appended to context)" style="cursor:pointer;font-size:11px;color:var(--text-dim);border:1px dashed var(--border);border-radius:4px;padding:2px 7px;margin-left:6px;white-space:nowrap;">
+      + Add paper
+      <input type="file" accept=".pdf" id="extraPdf" style="display:none;" onchange="addExtraPaper(this)">
+    </label>
     <span class="silence-indicator" id="silenceDisplay"></span>
+    <span id="enrichStatus" style="display:none;font-size:11px;color:var(--text-dim);background:var(--surface-2);border:1px solid var(--border);border-radius:4px;padding:2px 8px;white-space:nowrap;"></span>
+  </div>
+
+  <!-- Speaker strip -->
+  <div id="speakerStrip" style="display:none;background:var(--surface);border-bottom:1px solid var(--border);padding:6px 16px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0;">
+    <span style="font-size:11px;color:var(--text-dim);white-space:nowrap;">🎙 Speaking:</span>
+    <div id="speakerChips" style="display:flex;gap:5px;flex-wrap:wrap;"></div>
+    <button onclick="setCurrentSpeaker(null)" id="speakerNone"
+      style="font-size:11px;padding:3px 9px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text-dim);cursor:pointer;">
+      No label
+    </button>
   </div>
 
   <div class="layout">
@@ -744,12 +847,405 @@
 
     <button class="icon-btn" id="ttsBtn" onclick="toggleTTS()" title="Auto-read AI responses">🔇</button>
     <button class="icon-btn" id="modeBtn" onclick="cycleSensitivity()" title="AI chattiness — click to cycle">🎯</button>
+    <button class="icon-btn" onclick="openMeetingSettings()" title="Switch provider / API key" style="font-size:16px;">⚙️</button>
+    <button class="icon-btn" onclick="showSummaryModal()" title="View summary &amp; email">📋</button>
     <button class="icon-btn danger" onclick="endMeeting()" title="End meeting">⏹</button>
   </div>
 </div>
 
+
+<!-- Mid-meeting settings modal -->
+<div id="settingsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:900;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px 22px;width:370px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,0.5);">
+    <div style="font-size:15px;font-weight:650;margin-bottom:16px;color:var(--text);">⚙️ AI Settings</div>
+
+    <!-- provider tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:14px;">
+      <button id="mtProvGemini"   onclick="switchMeetingProvider('gemini')"    class="mt-tab">Gemini</button>
+      <button id="mtProvGroq"     onclick="switchMeetingProvider('groq')"      class="mt-tab">Groq</button>
+      <button id="mtProvAnthropic" onclick="switchMeetingProvider('anthropic')" class="mt-tab">Anthropic</button>
+    </div>
+
+    <label id="mtKeyLabel" style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:6px;">API Key</label>
+    <input type="password" id="mtApiKey" autocomplete="off"
+      style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;color:var(--text);font-size:13px;outline:none;"
+      placeholder="" oninput="document.getElementById('mtErr').style.display='none'">
+
+    <div id="mtErr" style="font-size:12px;margin-top:6px;display:none;color:var(--red);"></div>
+
+    <div style="margin-top:12px;">
+      <label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:5px;">Model</label>
+      <select id="mtModelSelect" onchange="selectedModel = this.value"
+        style="width:100%;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 10px;color:var(--text);font-size:13px;outline:none;cursor:pointer;">
+      </select>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button onclick="testMeetingKey()"
+        style="padding:7px 13px;font-size:12px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted);cursor:pointer;">
+        Test Key
+      </button>
+      <button onclick="saveMeetingSettings()"
+        style="flex:1;padding:7px;font-size:13px;background:var(--accent);border:none;border-radius:var(--radius-sm);color:#fff;font-weight:600;cursor:pointer;">
+        Save &amp; Continue
+      </button>
+      <button onclick="closeMeetingSettings()"
+        style="padding:7px 13px;font-size:12px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted);cursor:pointer;">
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Summary modal -->
+<div id="summaryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:901;align-items:flex-start;justify-content:center;padding-top:40px;overflow-y:auto;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:26px 24px;width:620px;max-width:94vw;margin:0 auto 40px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;">
+      <div style="font-size:15px;font-weight:650;">📋 Meeting Summary</div>
+      <button onclick="closeSummaryModal()" style="background:none;border:none;color:var(--text-muted);font-size:18px;cursor:pointer;">✕</button>
+    </div>
+    <div id="summaryContent" style="font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;max-height:50vh;overflow-y:auto;background:var(--surface-2);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:16px;font-family:monospace;"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button onclick="copySummary()" style="padding:8px 16px;font-size:13px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted);cursor:pointer;">📋 Copy</button>
+      <button onclick="emailSummary()" style="flex:1;padding:8px;font-size:13px;font-weight:600;background:var(--accent);border:none;border-radius:var(--radius-sm);color:#fff;cursor:pointer;">✉️ Email to Lab</button>
+      <button onclick="closeSummaryModal()" style="padding:8px 16px;font-size:13px;background:transparent;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted);cursor:pointer;">Close</button>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--text-dim);">
+      ✉️ Email opens your mail client with all attendees pre-filled. Starred ⭐ responses are highlighted.
+    </div>
+  </div>
+</div>
+
 <!-- PDF.js -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js">
+
+
+// ── LAB MEMBERS ───────────────────────────────────────────────────────────
+function renderMemberList() {
+  const list = document.getElementById('memberList');
+  if (!list) return;
+  list.innerHTML = '';
+  labMembers.forEach((m, i) => {
+    const row = document.createElement('div');
+    row.className = 'member-row';
+    row.innerHTML = `<span>${esc(m.name)}</span><small>${esc(m.email)}</small>
+      <button onclick="removeMember(${i})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;" title="Remove">✕</button>`;
+    list.appendChild(row);
+  });
+}
+
+function addMember() {
+  const name  = document.getElementById('newMemberName').value.trim();
+  const email = document.getElementById('newMemberEmail').value.trim();
+  if (!name) return;
+  labMembers.push({ name, email });
+  saveMembers(labMembers);
+  document.getElementById('newMemberName').value  = '';
+  document.getElementById('newMemberEmail').value = '';
+  renderMemberList();
+}
+
+function removeMember(i) {
+  labMembers.splice(i, 1);
+  saveMembers(labMembers);
+  renderMemberList();
+}
+
+// ── SPEAKER LABELS ────────────────────────────────────────────────────────
+function renderSpeakerStrip() {
+  const strip = document.getElementById('speakerStrip');
+  const chips = document.getElementById('speakerChips');
+  if (!chips) return;
+  strip.style.display = labMembers.length ? 'flex' : 'none';
+  chips.innerHTML = '';
+  labMembers.forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'speaker-chip' + (currentSpeaker === m.name ? ' active' : '');
+    btn.textContent = m.name;
+    btn.onclick = () => setCurrentSpeaker(m.name);
+    chips.appendChild(btn);
+  });
+}
+
+function setCurrentSpeaker(name) {
+  currentSpeaker = name;
+  document.querySelectorAll('.speaker-chip').forEach(c => {
+    c.classList.toggle('active', c.textContent === name);
+  });
+  const noneBtn = document.getElementById('speakerNone');
+  if (noneBtn) noneBtn.style.fontWeight = name ? 'normal' : '600';
+}
+
+// ── EXTRA PAPER ───────────────────────────────────────────────────────────
+async function addExtraPaper(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const label = input.parentElement;
+  label.textContent = '⏳ Loading…';
+  try {
+    const extra = await extractPDF(file);
+    paperText += '\n\n---\n\n[Additional paper: ' + file.name + ']\n' + extra;
+    const titleEl = document.getElementById('paperTitle');
+    titleEl.textContent = titleEl.textContent + ' + ' + file.name.replace('.pdf','');
+    label.textContent = '✅ ' + file.name.replace('.pdf','').slice(0,20);
+  } catch(e) {
+    label.innerHTML = '+ Add paper <input type="file" accept=".pdf" id="extraPdf" style="display:none;" onchange="addExtraPaper(this)">';
+    alert('Could not load extra PDF: ' + e.message);
+  }
+  input.value = '';
+}
+
+// ── BOOKMARKS ─────────────────────────────────────────────────────────────
+function toggleStar(idx) {
+  if (!aiCards[idx]) return;
+  aiCards[idx].starred = !aiCards[idx].starred;
+  const btn = document.querySelector('[data-star="' + idx + '"]');
+  if (btn) { btn.textContent = aiCards[idx].starred ? '⭐' : '☆'; btn.classList.toggle('starred', aiCards[idx].starred); }
+}
+
+// ── SUMMARY & EMAIL ───────────────────────────────────────────────────────
+function buildSummaryText() {
+  const dur = meetingStart ? Math.round((Date.now() - meetingStart) / 60000) : 0;
+  const paper = document.getElementById('paperTitle')?.textContent || 'Unknown paper';
+  const date = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  let lines = [
+    'Zwicker Lab Reading Group — AI Summary',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    'Paper: ' + paper,
+    'Date:  ' + date,
+    'Duration: ~' + dur + ' min',
+    '',
+    '── SHERLOCK CONTRIBUTIONS ─────────────────────',
+    ''
+  ];
+
+  const starred = aiCards.filter(c => c.starred);
+  const rest    = aiCards.filter(c => !c.starred && c.trigger !== 'error');
+
+  if (starred.length) {
+    lines.push('★ HIGHLIGHTED');
+    starred.forEach((c, i) => {
+      lines.push('[' + fmtTime(c.ts) + '] ' + (c.trigger || '').toUpperCase());
+      if (c.question) lines.push('Q: ' + c.question);
+      lines.push(c.text);
+      lines.push('');
+    });
+  }
+
+  if (rest.length) {
+    if (starred.length) lines.push('─── Other contributions ───');
+    rest.forEach(c => {
+      lines.push('[' + fmtTime(c.ts) + '] ' + (c.trigger || '').toUpperCase());
+      if (c.question) lines.push('Q: ' + c.question);
+      lines.push(c.text);
+      lines.push('');
+    });
+  }
+
+  if (!aiCards.filter(c => c.trigger !== 'error').length) {
+    lines.push('(No AI contributions recorded)');
+  }
+
+  const excerpt = transcriptLog.slice(-20).map(e => e.text).join(' ');
+  if (excerpt) {
+    lines.push('', '── LAST ~20 TRANSCRIPT SEGMENTS ──────────────', '', excerpt);
+  }
+
+  return lines.join('\n');
+}
+
+function showSummaryModal() {
+  document.getElementById('summaryContent').textContent = buildSummaryText();
+  document.getElementById('summaryModal').style.display = 'flex';
+}
+
+function closeSummaryModal() {
+  document.getElementById('summaryModal').style.display = 'none';
+}
+
+function copySummary() {
+  const text = document.getElementById('summaryContent').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => { btn.textContent = '📋 Copy'; }, 1800);
+  }).catch(() => {
+    const el = document.getElementById('summaryContent');
+    const range = document.createRange(); range.selectNodeContents(el);
+    window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+  });
+}
+
+function emailSummary() {
+  const summary = buildSummaryText();
+  const paper   = document.getElementById('paperTitle')?.textContent || 'Paper';
+  const date    = new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  const subject = encodeURIComponent('Zwicker Lab Reading Group — ' + paper + ' — ' + date);
+  const body    = encodeURIComponent(summary.slice(0, 1800)); // mailto body limit
+  const emails  = labMembers.filter(m => m.email).map(m => m.email).join(',');
+  window.open('mailto:' + emails + '?subject=' + subject + '&body=' + body);
+}
+
+// ── BROWSER NOTIFICATIONS ─────────────────────────────────────────────────
+function notifyIfHidden(text, trigger) {
+  if (document.visibilityState === 'visible') return; // already watching
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const icons = { wakeword: '🔍', uncertainty: '❓', silence: '🤫', manual: '✉️' };
+  const icon  = icons[trigger] || '🤖';
+  const snippet = text.length > 100 ? text.slice(0, 97) + '…' : text;
+  try {
+    const n = new Notification('✋ Sherlock has something to say', {
+      body: snippet,
+      icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔍</text></svg>',
+      tag:  'sherlock-response',   // replaces previous so they don't pile up
+      renotify: true,
+      silent: false
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch(e) { /* notifications blocked or denied */ }
+}
+
+// ── MID-MEETING SETTINGS ──────────────────────────────────────────────────
+let mtProvider = '';
+
+function openMeetingSettings() {
+  // Sync model dropdowns on open
+  const mtSel = document.getElementById('mtModelSelect');
+  if (mtSel) {
+    const models = PROVIDER_MODELS[provider] || [];
+    mtSel.innerHTML = models.map(m =>
+      `<option value="${m.id}"${m.id === selectedModel ? ' selected' : ''}>${m.label}</option>`
+    ).join('');
+  }
+
+  mtProvider = provider;
+  const modal = document.getElementById('settingsModal');
+  modal.style.display = 'flex';
+  document.getElementById('mtApiKey').value = apiKey;
+  document.getElementById('mtErr').style.display = 'none';
+  updateMtTabs();
+  updateMtLabel();
+}
+
+function closeMeetingSettings() {
+  document.getElementById('settingsModal').style.display = 'none';
+}
+
+function switchMeetingProvider(p) {
+  // Populate model dropdown
+  const mtSel = document.getElementById('mtModelSelect');
+  if (mtSel) {
+    const models = PROVIDER_MODELS[p] || [];
+    mtSel.innerHTML = models.map((m, i) =>
+      `<option value="${m.id}"${m.id === selectedModel ? ' selected' : (i === 0 && !models.find(x => x.id === selectedModel) ? ' selected' : '')}>${m.label}</option>`
+    ).join('');
+  }
+
+  mtProvider = p;
+  // load saved key for the selected provider
+  try {
+    const saved = localStorage.getItem('sherlock_key_' + p);
+    document.getElementById('mtApiKey').value = (p === provider) ? apiKey : (saved || '');
+  } catch(e) { document.getElementById('mtApiKey').value = (p === provider) ? apiKey : ''; }
+  document.getElementById('mtErr').style.display = 'none';
+  updateMtTabs();
+  updateMtLabel();
+}
+
+function updateMtTabs() {
+  ['gemini','groq','anthropic'].forEach(p => {
+    const btn = document.getElementById('mtProv' + p.charAt(0).toUpperCase() + p.slice(1));
+    if (btn) btn.className = 'mt-tab' + (p === mtProvider ? ' active' : '');
+  });
+}
+
+function updateMtLabel() {
+  document.getElementById('mtKeyLabel').textContent = PROVIDERS[mtProvider]?.label || 'API Key';
+  document.getElementById('mtApiKey').placeholder   = PROVIDERS[mtProvider]?.placeholder || '';
+}
+
+async function testMeetingKey() {
+  const key   = document.getElementById('mtApiKey').value.trim();
+  const errEl = document.getElementById('mtErr');
+  if (!key) { errEl.textContent = 'Enter a key first'; errEl.style.color = 'var(--red)'; errEl.style.display = 'block'; return; }
+  errEl.textContent = 'Testing…'; errEl.style.color = 'var(--text-muted)'; errEl.style.display = 'block';
+  try {
+    if (mtProvider === 'groq') {
+      const res  = await fetch('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': 'Bearer ' + key } });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const models = (data.data || []).filter(m => !m.id.includes('whisper') && !m.id.includes('tts')).map(m => m.id).join(', ');
+        errEl.textContent = '✅ Valid! Models: ' + models; errEl.style.color = 'var(--green)';
+      } else { errEl.textContent = '❌ HTTP ' + res.status + ': ' + (data.error?.message || ''); errEl.style.color = 'var(--red)'; }
+    } else if (mtProvider === 'gemini') {
+      const res  = await fetch('https://generativelanguage.googleapis.com/v1/models?key=' + key);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) { errEl.textContent = '✅ Gemini key valid!'; errEl.style.color = 'var(--green)'; }
+      else { errEl.textContent = '❌ HTTP ' + res.status + ': ' + (data.error?.message || ''); errEl.style.color = 'var(--red)'; }
+    } else {
+      errEl.textContent = 'Anthropic: use Save & Continue to test during a meeting.';
+      errEl.style.color = 'var(--text-muted)';
+    }
+  } catch(e) { errEl.textContent = '❌ ' + e.message; errEl.style.color = 'var(--red)'; }
+}
+
+function saveMeetingSettings() {
+  const key = document.getElementById('mtApiKey').value.trim();
+  const cfg = PROVIDERS[mtProvider];
+  const errEl = document.getElementById('mtErr');
+  if (!key || !cfg.validate(key)) {
+    errEl.textContent = cfg.errMsg; errEl.style.color = 'var(--red)'; errEl.style.display = 'block'; return;
+  }
+  provider = mtProvider;
+  apiKey   = key;
+  try { localStorage.setItem('sherlock_key_' + provider, key); } catch(e) {}
+  closeMeetingSettings();
+  // Brief toast
+  const toast = document.createElement('div');
+  toast.textContent = '✅ Switched to ' + mtProvider.charAt(0).toUpperCase() + mtProvider.slice(1);
+  Object.assign(toast.style, {
+    position:'fixed', bottom:'80px', left:'50%', transform:'translateX(-50%)',
+    background:'var(--surface)', border:'1px solid var(--green)', color:'var(--green)',
+    padding:'8px 18px', borderRadius:'20px', fontSize:'13px', zIndex:'999',
+    pointerEvents:'none'
+  });
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2500);
+}
+
+
+// ── SAVED KEY HELPERS ─────────────────────────────────────────────────────
+function clearSavedKey() {
+  try {
+    localStorage.removeItem('sherlock_key_' + provider);
+    document.getElementById('apiKey').value = '';
+    const btn = document.getElementById('clearKeyBtn');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Cleared';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  } catch(e) {}
+}
+
+// On first load, restore last used provider + key
+(function restoreSession() {
+  try {
+    const lastProvider = localStorage.getItem('sherlock_last_provider');
+    if (lastProvider && ['gemini','groq','anthropic'].includes(lastProvider)) {
+      selectProvider(lastProvider);
+      populateModelSelect(lastProvider);
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.p === lastProvider);
+      });
+    }
+  } catch(e) {}
+  // render member list on setup screen
+  labMembers = loadMembers();
+  renderMemberList();
+})();
+
+</script>
 <script>
 
 // ── PROVIDER CONFIG ───────────────────────────
@@ -764,7 +1260,7 @@ const PROVIDERS = {
   groq: {
     label:       'Groq API Key',
     placeholder: 'gsk_…',
-    hint:        '⚡ Free tier: very fast Llama 3.3 70B inference. Get a key at <a href="https://console.groq.com/keys" target="_blank" style="color:var(--accent)">console.groq.com/keys</a>',
+    hint:        '⚡ Free tier: GPT OSS 120B — fast inference. Get a key at <a href="https://console.groq.com/keys" target="_blank" style="color:var(--accent)">console.groq.com/keys</a>',
     validate:    k => k.startsWith('gsk_'),
     errMsg:      'Groq keys start with "gsk_" — get one at console.groq.com/keys'
   },
@@ -792,12 +1288,65 @@ const MAX_PAPER_CHARS = 70000;
 const MIN_MANUAL_INTERVAL = 5000; // 5 s between manual asks
 const MODELS = ['claude-opus-4-5', 'claude-sonnet-4-5', 'claude-3-5-sonnet-20241022'];
 
+// ── PROVIDER MODEL LISTS (best first) ─────────
+const PROVIDER_MODELS = {
+  gemini: [
+    { id: 'gemini-3.8-flash',      label: 'Gemini 3.8 Flash — Free, fast (recommended)' },
+    { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash — Free' },
+    { id: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro — Paid, most capable' },
+  ],
+  groq: [
+    { id: 'openai/gpt-oss-120b',              label: 'GPT OSS 120B — Free (recommended)' },
+    { id: 'llama-4-maverick-17b-128e-instruct', label: 'Llama 4 Maverick 17B — Free' },
+    { id: 'llama-3.3-70b-versatile',          label: 'Llama 3.3 70B — Free, reliable' },
+    { id: 'mixtral-8x7b-32768',               label: 'Mixtral 8x7B — Free' },
+  ],
+  anthropic: [
+    { id: 'claude-opus-4-5',                  label: 'Claude Opus 4.5 — Most capable' },
+    { id: 'claude-sonnet-4-5',                label: 'Claude Sonnet 4.5 — Balanced' },
+    { id: 'claude-3-5-sonnet-20241022',        label: 'Claude 3.5 Sonnet — Efficient' },
+  ]
+};
+
 // ── STATE ─────────────────────────────────────
-let apiKey       = '';
-let provider     = 'gemini';
+let apiKey         = '';
+let provider       = 'gemini';
+let selectedModel  = '';      // empty = use provider default
 let paperText    = '';
 let paperTitle_  = '';
 let sensitivity  = 'balanced';
+let wakeWord     = 'sherlock';
+let relatedContext = '';      // injected from Semantic Scholar
+let currentSpeaker = null;   // name string or null
+let aiCards      = [];       // {text, trigger, ts, starred, speaker}
+let seedQs       = [];       // strings, consumed one at a time
+let meetingStart = 0;
+
+const DEFAULT_MEMBERS = [
+  { name: 'Tanushree', email: 'tbanerje@umd.edu' },
+  { name: 'Allen',     email: 'atu1@umd.edu' },
+  { name: 'Garner',    email: 'garner@umd.edu' },
+  { name: 'Jerad',     email: 'jhanson7@umd.edu' },
+  { name: 'Pranav',    email: 'pasthana@umd.edu' },
+  { name: 'Patrick',   email: 'pthu@umd.edu' },
+  { name: 'Sam',       email: 'sjaudia@umd.edu' },
+  { name: 'Haiyang',   email: 'yinghy@umd.edu' },
+  { name: 'Yun',       email: 'yunhe@umd.edu' },
+  { name: 'Matthias',  email: 'zwicker@umd.edu' },
+];
+
+function loadMembers() {
+  try {
+    const saved = localStorage.getItem('sherlock_members');
+    return saved ? JSON.parse(saved) : DEFAULT_MEMBERS.map(m => ({...m}));
+  } catch(e) { return DEFAULT_MEMBERS.map(m => ({...m})); }
+}
+
+function saveMembers(members) {
+  try { localStorage.setItem('sherlock_members', JSON.stringify(members)); } catch(e) {}
+}
+
+let labMembers = loadMembers();
 
 let recognition  = null;
 let isListening  = false;
@@ -824,12 +1373,19 @@ if (typeof pdfjsLib !== 'undefined') {
 // ── PROVIDER UI ───────────────────────────────
 function setProvider(p) {
   provider = p;
+  // restore saved key for this provider (localStorage, browser-local only)
+  try {
+    const saved = localStorage.getItem('sherlock_key_' + p);
+    if (saved) document.getElementById('apiKey').value = saved;
+    localStorage.setItem('sherlock_last_provider', p);
+  } catch(e) {}
   const cfg = PROVIDERS[p];
   document.getElementById('keyLabel').textContent   = cfg.label;
   document.getElementById('apiKey').placeholder     = cfg.placeholder;
   document.getElementById('providerHint').innerHTML = cfg.hint;
   document.getElementById('apiKey').value           = '';
   document.getElementById('apiErr').style.display   = 'none';
+  populateModelSelect(p);
   document.querySelectorAll('#providerRow .tab').forEach((b, i) =>
     b.classList.toggle('active', ['gemini','groq','anthropic'][i] === p));
 }
@@ -894,6 +1450,17 @@ async function extractPDF(file) {
   return text;
 }
 
+// ── MODEL SELECT ─────────────────────────────
+function populateModelSelect(p) {
+  const sel = document.getElementById('modelSelect');
+  if (!sel) return;
+  const models = PROVIDER_MODELS[p] || [];
+  sel.innerHTML = models.map((m, i) =>
+    `<option value="${m.id}"${i === 0 ? ' selected' : ''}>${m.label}</option>`
+  ).join('');
+  selectedModel = models[0]?.id || '';
+}
+
 // ── TEST API KEY ──────────────────────────────
 async function testApiKey() {
   const key = document.getElementById('apiKey').value.trim();
@@ -947,6 +1514,7 @@ async function startMeeting() {
     return;
   }
   apiKey = key;
+  try { localStorage.setItem('sherlock_key_' + provider, key); } catch(e) {}
 
   const btn = document.getElementById('startBtn');
   const lbl = document.getElementById('startLabel');
@@ -971,9 +1539,29 @@ async function startMeeting() {
 
   // Switch screens
   document.getElementById('setup').style.display = 'none';
+  // Read config from setup fields
+  const ww = document.getElementById('wakeWordInput')?.value.trim().toLowerCase();
+  if (ww) wakeWord = ww;
+
+  const rawSeedQs = document.getElementById('seedQsInput')?.value || '';
+  seedQs = rawSeedQs.split('\n').map(q => q.trim()).filter(Boolean);
+
+  aiCards = [];
+  currentSpeaker = null;
+  meetingStart = Date.now();
+
+  // Request notification permission for when Sherlock responds off-screen
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
   const meetEl = document.getElementById('meeting');
   meetEl.classList.add('active');
+  renderSpeakerStrip();
+  renderMemberList();
   document.getElementById('paperTitle').textContent = paperTitle_;
+  // Background: enrich context with Semantic Scholar related papers
+  relatedContext = '';
+  enrichFromSemanticScholar(paperTitle_).catch(() => {});
   setStatus('on', 'Ready — press 🎤');
   btn.disabled = false; lbl.textContent = 'Start Meeting';
 }
@@ -1016,14 +1604,19 @@ function onSpeechResult(event) {
 }
 
 function addTx(text) {
-  transcriptLog.push({ text, t: Date.now() });
+  const ts = Date.now();
+  transcriptLog.push({ text, t: ts, speaker: currentSpeaker });
   const feed = document.getElementById('txFeed');
   removeEmpty(feed);
   if (interimEl) { interimEl.remove(); interimEl = null; }
 
   const el = document.createElement('div');
   el.className = 'tx-entry';
-  el.innerHTML = `<div class="tx-time">${fmtTime(Date.now())}</div>
+  const speakerHtml = currentSpeaker
+    ? `<div class="tx-speaker">${esc(currentSpeaker)}</div>`
+    : '';
+  el.innerHTML = `<div class="tx-time">${fmtTime(ts)}</div>
+                  ${speakerHtml}
                   <div class="tx-text">${esc(text)}</div>`;
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
@@ -1089,7 +1682,8 @@ function stopSilenceTick() {
 
 // ── WAKE WORD DETECTION ───────────────────────
 function maybeDetectWakeWord(text) {
-  if (!/\bsherlock\b/i.test(text)) return;
+  const wakeRe = new RegExp('\\b' + wakeWord.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '\\b', 'i');
+  if (!wakeRe.test(text)) return;
   // Give them ~1.5 s to finish their sentence, then respond
   setTimeout(() => {
     if (!isThinking) triggerAI('wakeword', null);
@@ -1136,12 +1730,22 @@ async function triggerAI(trigger, question) {
   } else if (trigger === 'uncertainty') {
     userMsg = `Someone in the group expressed uncertainty or asked a question. Here's the recent discussion:\n\n"${ctx}"\n\nIf you can genuinely clarify something from the paper, do so briefly. If not, respond with exactly: NO_CONTRIBUTION`;
   } else {
-    userMsg = `The discussion just paused. Recent conversation:\n\n"${ctx || '(no transcript yet)'}"\n\nShould you add something? Consider: a detail they missed, a connection to related work, a question that sparks discussion, a caveat to a claim. Only if it's genuinely valuable. If not, respond with exactly: NO_CONTRIBUTION`;
+    const seedQ = seedQs.length ? seedQs.shift() : null;
+    if (seedQ) {
+      userMsg = \`Use this discussion question to spark conversation: "\${seedQ}"\n\nRecent context: "\${ctx || '(none yet)'}"
+
+Answer briefly and invite the group to respond.\`;
+    } else {
+      userMsg = \`The discussion just paused. Recent conversation:\n\n"\${ctx || '(no transcript yet)'}"
+
+Should you add something? Consider: a detail they missed, a connection to related work, a question that sparks discussion, a caveat to a claim. Only if it's genuinely valuable. If not, respond with exactly: NO_CONTRIBUTION\`;
+    }
   }
 
   try {
     const text = await callClaude(userMsg);
     if (text && text !== 'NO_CONTRIBUTION' && !text.startsWith('NO_CONTRIBUTION')) {
+      notifyIfHidden(text, trigger);
       if (!question) lastAIAuto = Date.now();
       addAICard(text, trigger, question);
       if (ttsOn) speak(text);
@@ -1163,7 +1767,8 @@ async function callClaude(userMsg) {
 
 async function callGemini(userMsg) {
   const sys = buildSystem();
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
+  const gModel = selectedModel && selectedModel.startsWith('gemini') ? selectedModel : 'gemini-3.8-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${gModel}:generateContent?key=${apiKey}`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -1190,7 +1795,7 @@ async function callGroq(userMsg) {
       'content-type':  'application/json'
     },
     body: JSON.stringify({
-      model:      'meta-llama/llama-4-maverick-17b-128e-instruct',
+      model:      (selectedModel && !selectedModel.startsWith('gemini') && !selectedModel.startsWith('claude') ? selectedModel : 'openai/gpt-oss-120b'),
       max_tokens: 350,
       messages:   [
         { role: 'system', content: sys },
@@ -1218,7 +1823,7 @@ async function callAnthropic(userMsg) {
       'anthropic-dangerous-allow-browser': 'true'
     },
     body: JSON.stringify({
-      model:      'claude-opus-4-5',
+      model:      (selectedModel && selectedModel.startsWith('claude') ? selectedModel : 'claude-opus-4-5'),
       max_tokens: 350,
       system:     sys,
       messages:   [{ role: 'user', content: userMsg }]
@@ -1231,11 +1836,93 @@ async function callAnthropic(userMsg) {
   return (await res.json()).content[0].text.trim();
 }
 
+// ── SEMANTIC SCHOLAR ENRICHMENT ──────────────
+async function enrichFromSemanticScholar(title) {
+  function setEnrichStatus(msg) {
+    const el = document.getElementById('enrichStatus');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = msg ? 'inline-block' : 'none';
+  }
+
+  setEnrichStatus('🔍 Searching Semantic Scholar…');
+  try {
+    // Step 1: find the paper
+    const searchUrl = 'https://api.semanticscholar.org/graph/v1/paper/search?query='
+      + encodeURIComponent(title)
+      + '&fields=paperId,title,authors,abstract&limit=1';
+    const searchRes = await fetch(searchUrl);
+    if (!searchRes.ok) throw new Error('S2 search HTTP ' + searchRes.status);
+    const searchData = await searchRes.json();
+    const paper = searchData.data?.[0];
+    if (!paper?.paperId) { setEnrichStatus(''); return; }
+
+    setEnrichStatus('📚 Fetching related work…');
+
+    // Step 2: fetch references with abstracts
+    const refUrl = 'https://api.semanticscholar.org/graph/v1/paper/'
+      + paper.paperId
+      + '/references?fields=paperId,title,abstract,authors,citationCount&limit=25';
+    const refRes = await fetch(refUrl);
+    if (!refRes.ok) throw new Error('S2 refs HTTP ' + refRes.status);
+    const refData = await refRes.json();
+
+    const refs = (refData.data || [])
+      .map(r => r.citedPaper)
+      .filter(p => p?.abstract && p.abstract.length > 80)
+      .sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0))
+      .slice(0, 8);
+
+    // Step 3: also get citing papers (what cites this paper?)
+    const citUrl = 'https://api.semanticscholar.org/graph/v1/paper/'
+      + paper.paperId
+      + '/citations?fields=paperId,title,abstract,authors,citationCount&limit=15';
+    let citingPapers = [];
+    try {
+      const citRes = await fetch(citUrl);
+      if (citRes.ok) {
+        const citData = await citRes.json();
+        citingPapers = (citData.data || [])
+          .map(c => c.citingPaper)
+          .filter(p => p?.abstract && p.abstract.length > 80)
+          .sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0))
+          .slice(0, 4);
+      }
+    } catch(e) { /* ignore */ }
+
+    if (refs.length === 0 && citingPapers.length === 0) { setEnrichStatus(''); return; }
+
+    const fmtPaper = (p) => {
+      const authors = (p.authors || []).map(a => a.name).slice(0, 3).join(', ');
+      const abstract = (p.abstract || '').slice(0, 280);
+      return `• "${p.title}" (${authors}): ${abstract}…`;
+    };
+
+    let ctx = '\n\n<related_work>\nSherlock has additional knowledge from Semantic Scholar about papers related to this work. Use this context to give richer, more connected answers.\n';
+    if (refs.length) {
+      ctx += '\n[Cited by this paper]\n' + refs.map(fmtPaper).join('\n');
+    }
+    if (citingPapers.length) {
+      ctx += '\n\n[Papers that cite this work]\n' + citingPapers.map(fmtPaper).join('\n');
+    }
+    ctx += '\n</related_work>';
+
+    relatedContext = ctx;
+    const total = refs.length + citingPapers.length;
+    setEnrichStatus(`✅ +${total} related papers in context`);
+    setTimeout(() => setEnrichStatus(''), 5000);
+  } catch(e) {
+    console.warn('Semantic Scholar enrichment failed:', e.message);
+    document.getElementById('enrichStatus') && (document.getElementById('enrichStatus').style.display = 'none');
+  }
+}
+
 function buildSystem() {
   const paper = paperText.length > MAX_PAPER_CHARS
     ? paperText.slice(0, MAX_PAPER_CHARS) + '\n\n[truncated]'
     : paperText;
 
+  const relCtx = relatedContext || '';
   return `You are Sherlock, a well-prepared PhD student in a reading group on 3D vision and computer graphics at the University of Maryland (Matthias Zwicker's lab). You have thoroughly read this week's paper and are attending as a peer — not a professor, not an assistant. When someone calls your name, respond directly to what they asked.
 
 ===PAPER===
@@ -1252,7 +1939,7 @@ Your job:
 • Keep every contribution to 1–4 sentences. No bullet lists. No preamble.
 • If you have nothing genuinely new to add, respond with exactly: NO_CONTRIBUTION
 
-You are a respectful peer. Every word you say should earn its place.`;
+You are a respectful peer. Every word you say should earn its place.${relCtx}`;
 }
 
 // ── AI CARD UI ────────────────────────────────
@@ -1268,12 +1955,16 @@ function addAICard(text, trigger, question) {
     error: '⚠️ Error'
   };
 
+  const idx = aiCards.length;
+  aiCards.push({ text, trigger, question, ts: Date.now(), starred: false });
+
   const card = document.createElement('div');
   card.className = 'ai-card';
   card.innerHTML = `
     <div class="ai-card-header">
       <span class="ai-trigger">${labels[trigger] || '✨ Insight'}</span>
       <span class="ai-card-time">${fmtTime(Date.now())}</span>
+      ${trigger !== 'error' ? `<button class="ai-star" data-star="${idx}" onclick="toggleStar(${idx})" title="Star this response">☆</button>` : ''}
     </div>
     ${question ? `<div class="ai-q">Q: ${esc(question)}</div>` : ''}
     <div class="ai-text">${esc(text)}</div>
@@ -1415,7 +2106,7 @@ function speak(text, btn) {
 
 // ── END MEETING ───────────────────────────────
 function endMeeting() {
-  if (!confirm('End the meeting session?')) return;
+  if (!confirm('End the meeting and view summary?')) return;
   if (recognition) recognition.stop();
   isListening = false; isThinking = false;
   stopSilenceTick(); clearTimeout(silenceTimer); cancelAnimationFrame(cooldownRAF);
@@ -1423,6 +2114,7 @@ function endMeeting() {
   document.getElementById('meeting').classList.remove('active');
   document.getElementById('setup').style.display = '';
   setStatus('', 'Ready');
+  if (aiCards.filter(c => c.trigger !== 'error').length) showSummaryModal();
 
   // Reset
   transcriptLog = [];
@@ -1460,6 +2152,314 @@ function removeEmpty(feed) {
 // Warm up voice list
 window.speechSynthesis.getVoices();
 window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+
+
+
+
+// ── LAB MEMBERS ───────────────────────────────────────────────────────────
+function renderMemberList() {
+  const list = document.getElementById('memberList');
+  if (!list) return;
+  list.innerHTML = '';
+  labMembers.forEach((m, i) => {
+    const row = document.createElement('div');
+    row.className = 'member-row';
+    row.innerHTML = `<span>${esc(m.name)}</span><small>${esc(m.email)}</small>
+      <button onclick="removeMember(${i})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px;" title="Remove">✕</button>`;
+    list.appendChild(row);
+  });
+}
+
+function addMember() {
+  const name  = document.getElementById('newMemberName').value.trim();
+  const email = document.getElementById('newMemberEmail').value.trim();
+  if (!name) return;
+  labMembers.push({ name, email });
+  saveMembers(labMembers);
+  document.getElementById('newMemberName').value  = '';
+  document.getElementById('newMemberEmail').value = '';
+  renderMemberList();
+}
+
+function removeMember(i) {
+  labMembers.splice(i, 1);
+  saveMembers(labMembers);
+  renderMemberList();
+}
+
+// ── SPEAKER LABELS ────────────────────────────────────────────────────────
+function renderSpeakerStrip() {
+  const strip = document.getElementById('speakerStrip');
+  const chips = document.getElementById('speakerChips');
+  if (!chips) return;
+  strip.style.display = labMembers.length ? 'flex' : 'none';
+  chips.innerHTML = '';
+  labMembers.forEach(m => {
+    const btn = document.createElement('button');
+    btn.className = 'speaker-chip' + (currentSpeaker === m.name ? ' active' : '');
+    btn.textContent = m.name;
+    btn.onclick = () => setCurrentSpeaker(m.name);
+    chips.appendChild(btn);
+  });
+}
+
+function setCurrentSpeaker(name) {
+  currentSpeaker = name;
+  document.querySelectorAll('.speaker-chip').forEach(c => {
+    c.classList.toggle('active', c.textContent === name);
+  });
+  const noneBtn = document.getElementById('speakerNone');
+  if (noneBtn) noneBtn.style.fontWeight = name ? 'normal' : '600';
+}
+
+// ── EXTRA PAPER ───────────────────────────────────────────────────────────
+async function addExtraPaper(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const label = input.parentElement;
+  label.textContent = '⏳ Loading…';
+  try {
+    const extra = await extractPDF(file);
+    paperText += '\n\n---\n\n[Additional paper: ' + file.name + ']\n' + extra;
+    const titleEl = document.getElementById('paperTitle');
+    titleEl.textContent = titleEl.textContent + ' + ' + file.name.replace('.pdf','');
+    label.textContent = '✅ ' + file.name.replace('.pdf','').slice(0,20);
+  } catch(e) {
+    label.innerHTML = '+ Add paper <input type="file" accept=".pdf" id="extraPdf" style="display:none;" onchange="addExtraPaper(this)">';
+    alert('Could not load extra PDF: ' + e.message);
+  }
+  input.value = '';
+}
+
+// ── BOOKMARKS ─────────────────────────────────────────────────────────────
+function toggleStar(idx) {
+  if (!aiCards[idx]) return;
+  aiCards[idx].starred = !aiCards[idx].starred;
+  const btn = document.querySelector('[data-star="' + idx + '"]');
+  if (btn) { btn.textContent = aiCards[idx].starred ? '⭐' : '☆'; btn.classList.toggle('starred', aiCards[idx].starred); }
+}
+
+// ── SUMMARY & EMAIL ───────────────────────────────────────────────────────
+function buildSummaryText() {
+  const dur = meetingStart ? Math.round((Date.now() - meetingStart) / 60000) : 0;
+  const paper = document.getElementById('paperTitle')?.textContent || 'Unknown paper';
+  const date = new Date().toLocaleDateString('en-US', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+
+  let lines = [
+    'Zwicker Lab Reading Group — AI Summary',
+    '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━',
+    'Paper: ' + paper,
+    'Date:  ' + date,
+    'Duration: ~' + dur + ' min',
+    '',
+    '── SHERLOCK CONTRIBUTIONS ─────────────────────',
+    ''
+  ];
+
+  const starred = aiCards.filter(c => c.starred);
+  const rest    = aiCards.filter(c => !c.starred && c.trigger !== 'error');
+
+  if (starred.length) {
+    lines.push('★ HIGHLIGHTED');
+    starred.forEach((c, i) => {
+      lines.push('[' + fmtTime(c.ts) + '] ' + (c.trigger || '').toUpperCase());
+      if (c.question) lines.push('Q: ' + c.question);
+      lines.push(c.text);
+      lines.push('');
+    });
+  }
+
+  if (rest.length) {
+    if (starred.length) lines.push('─── Other contributions ───');
+    rest.forEach(c => {
+      lines.push('[' + fmtTime(c.ts) + '] ' + (c.trigger || '').toUpperCase());
+      if (c.question) lines.push('Q: ' + c.question);
+      lines.push(c.text);
+      lines.push('');
+    });
+  }
+
+  if (!aiCards.filter(c => c.trigger !== 'error').length) {
+    lines.push('(No AI contributions recorded)');
+  }
+
+  const excerpt = transcriptLog.slice(-20).map(e => e.text).join(' ');
+  if (excerpt) {
+    lines.push('', '── LAST ~20 TRANSCRIPT SEGMENTS ──────────────', '', excerpt);
+  }
+
+  return lines.join('\n');
+}
+
+function showSummaryModal() {
+  document.getElementById('summaryContent').textContent = buildSummaryText();
+  document.getElementById('summaryModal').style.display = 'flex';
+}
+
+function closeSummaryModal() {
+  document.getElementById('summaryModal').style.display = 'none';
+}
+
+function copySummary() {
+  const text = document.getElementById('summaryContent').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => { btn.textContent = '📋 Copy'; }, 1800);
+  }).catch(() => {
+    const el = document.getElementById('summaryContent');
+    const range = document.createRange(); range.selectNodeContents(el);
+    window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+  });
+}
+
+function emailSummary() {
+  const summary = buildSummaryText();
+  const paper   = document.getElementById('paperTitle')?.textContent || 'Paper';
+  const date    = new Date().toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+  const subject = encodeURIComponent('Zwicker Lab Reading Group — ' + paper + ' — ' + date);
+  const body    = encodeURIComponent(summary.slice(0, 1800)); // mailto body limit
+  const emails  = labMembers.filter(m => m.email).map(m => m.email).join(',');
+  window.open('mailto:' + emails + '?subject=' + subject + '&body=' + body);
+}
+
+// ── BROWSER NOTIFICATIONS ─────────────────────────────────────────────────
+function notifyIfHidden(text, trigger) {
+  if (document.visibilityState === 'visible') return; // already watching
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const icons = { wakeword: '🔍', uncertainty: '❓', silence: '🤫', manual: '✉️' };
+  const icon  = icons[trigger] || '🤖';
+  const snippet = text.length > 100 ? text.slice(0, 97) + '…' : text;
+  try {
+    const n = new Notification('✋ Sherlock has something to say', {
+      body: snippet,
+      icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔍</text></svg>',
+      tag:  'sherlock-response',   // replaces previous so they don't pile up
+      renotify: true,
+      silent: false
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+  } catch(e) { /* notifications blocked or denied */ }
+}
+
+// ── MID-MEETING SETTINGS ──────────────────────────────────────────────────
+let mtProvider = '';
+
+function openMeetingSettings() {
+  mtProvider = provider;
+  const modal = document.getElementById('settingsModal');
+  modal.style.display = 'flex';
+  document.getElementById('mtApiKey').value = apiKey;
+  document.getElementById('mtErr').style.display = 'none';
+  updateMtTabs();
+  updateMtLabel();
+}
+
+function closeMeetingSettings() {
+  document.getElementById('settingsModal').style.display = 'none';
+}
+
+function switchMeetingProvider(p) {
+  mtProvider = p;
+  // load saved key for the selected provider
+  try {
+    const saved = localStorage.getItem('sherlock_key_' + p);
+    document.getElementById('mtApiKey').value = (p === provider) ? apiKey : (saved || '');
+  } catch(e) { document.getElementById('mtApiKey').value = (p === provider) ? apiKey : ''; }
+  document.getElementById('mtErr').style.display = 'none';
+  updateMtTabs();
+  updateMtLabel();
+}
+
+function updateMtTabs() {
+  ['gemini','groq','anthropic'].forEach(p => {
+    const btn = document.getElementById('mtProv' + p.charAt(0).toUpperCase() + p.slice(1));
+    if (btn) btn.className = 'mt-tab' + (p === mtProvider ? ' active' : '');
+  });
+}
+
+function updateMtLabel() {
+  document.getElementById('mtKeyLabel').textContent = PROVIDERS[mtProvider]?.label || 'API Key';
+  document.getElementById('mtApiKey').placeholder   = PROVIDERS[mtProvider]?.placeholder || '';
+}
+
+async function testMeetingKey() {
+  const key   = document.getElementById('mtApiKey').value.trim();
+  const errEl = document.getElementById('mtErr');
+  if (!key) { errEl.textContent = 'Enter a key first'; errEl.style.color = 'var(--red)'; errEl.style.display = 'block'; return; }
+  errEl.textContent = 'Testing…'; errEl.style.color = 'var(--text-muted)'; errEl.style.display = 'block';
+  try {
+    if (mtProvider === 'groq') {
+      const res  = await fetch('https://api.groq.com/openai/v1/models', { headers: { 'Authorization': 'Bearer ' + key } });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const models = (data.data || []).filter(m => !m.id.includes('whisper') && !m.id.includes('tts')).map(m => m.id).join(', ');
+        errEl.textContent = '✅ Valid! Models: ' + models; errEl.style.color = 'var(--green)';
+      } else { errEl.textContent = '❌ HTTP ' + res.status + ': ' + (data.error?.message || ''); errEl.style.color = 'var(--red)'; }
+    } else if (mtProvider === 'gemini') {
+      const res  = await fetch('https://generativelanguage.googleapis.com/v1/models?key=' + key);
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) { errEl.textContent = '✅ Gemini key valid!'; errEl.style.color = 'var(--green)'; }
+      else { errEl.textContent = '❌ HTTP ' + res.status + ': ' + (data.error?.message || ''); errEl.style.color = 'var(--red)'; }
+    } else {
+      errEl.textContent = 'Anthropic: use Save & Continue to test during a meeting.';
+      errEl.style.color = 'var(--text-muted)';
+    }
+  } catch(e) { errEl.textContent = '❌ ' + e.message; errEl.style.color = 'var(--red)'; }
+}
+
+function saveMeetingSettings() {
+  const key = document.getElementById('mtApiKey').value.trim();
+  const cfg = PROVIDERS[mtProvider];
+  const errEl = document.getElementById('mtErr');
+  if (!key || !cfg.validate(key)) {
+    errEl.textContent = cfg.errMsg; errEl.style.color = 'var(--red)'; errEl.style.display = 'block'; return;
+  }
+  provider = mtProvider;
+  apiKey   = key;
+  try { localStorage.setItem('sherlock_key_' + provider, key); } catch(e) {}
+  closeMeetingSettings();
+  // Brief toast
+  const toast = document.createElement('div');
+  toast.textContent = '✅ Switched to ' + mtProvider.charAt(0).toUpperCase() + mtProvider.slice(1);
+  Object.assign(toast.style, {
+    position:'fixed', bottom:'80px', left:'50%', transform:'translateX(-50%)',
+    background:'var(--surface)', border:'1px solid var(--green)', color:'var(--green)',
+    padding:'8px 18px', borderRadius:'20px', fontSize:'13px', zIndex:'999',
+    pointerEvents:'none'
+  });
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2500);
+}
+
+
+// ── SAVED KEY HELPERS ─────────────────────────────────────────────────────
+function clearSavedKey() {
+  try {
+    localStorage.removeItem('sherlock_key_' + provider);
+    document.getElementById('apiKey').value = '';
+    const btn = document.getElementById('clearKeyBtn');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Cleared';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  } catch(e) {}
+}
+
+// On first load, restore last used provider + key
+(function restoreSession() {
+  try {
+    const lastProvider = localStorage.getItem('sherlock_last_provider');
+    if (lastProvider && ['gemini','groq','anthropic'].includes(lastProvider)) {
+      selectProvider(lastProvider);
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.p === lastProvider);
+      });
+    }
+  } catch(e) {}
+  // render member list on setup screen
+  labMembers = loadMembers();
+  renderMemberList();
+})();
 
 </script>
 </body>
