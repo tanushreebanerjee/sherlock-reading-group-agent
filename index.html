@@ -1963,13 +1963,13 @@ async function triggerAI(trigger, question) {
   } else {
     const seedQ = seedQs.length ? seedQs.shift() : null;
     if (seedQ) {
-      userMsg = \`Use this discussion question to spark conversation: "\${seedQ}"\n\nRecent context: "\${ctx || '(none yet)'}"
+      userMsg = `Use this discussion question to spark conversation: "\${seedQ}"\n\nRecent context: "\${ctx || '(none yet)'}"
 
-Answer briefly and invite the group to respond.\`;
+Answer briefly and invite the group to respond.`;
     } else {
-      userMsg = \`The discussion just paused. Recent conversation:\n\n"\${ctx || '(no transcript yet)'}"
+      userMsg = `The discussion just paused. Recent conversation:\n\n"\${ctx || '(no transcript yet)'}"
 
-Should you add something? Consider: a detail they missed, a connection to related work, a question that sparks discussion, a caveat to a claim. Only if it's genuinely valuable. If not, respond with exactly: NO_CONTRIBUTION\`;
+Should you add something? Consider: a detail they missed, a connection to related work, a question that sparks discussion, a caveat to a claim. Only if it's genuinely valuable. If not, respond with exactly: NO_CONTRIBUTION`;
     }
   }
 
