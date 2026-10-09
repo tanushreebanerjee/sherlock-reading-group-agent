@@ -878,6 +878,21 @@
     </div>
 
 
+    <!-- API enrichment keys -->
+    <div class="field">
+      <label>SearchAPI Key <span style="font-weight:400;opacity:.5">(optional — enables Google Scholar citations enrichment; get free key at <a href="https://searchapi.io" target="_blank" style="color:var(--accent)">searchapi.io</a>)</span></label>
+      <input type="password" id="searchApiKey" placeholder="searchapi_…" autocomplete="off"
+        style="font-size:13px;"
+        oninput="try{localStorage.setItem('sherlock_searchapi_key',this.value)}catch(e){}">
+    </div>
+
+    <div class="field">
+      <label>Tavily Key <span style="font-weight:400;opacity:.5">(optional — adds live web search context; get key at <a href="https://tavily.com" target="_blank" style="color:var(--accent)">tavily.com</a>)</span></label>
+      <input type="password" id="tavilyKey" placeholder="tvly-…" autocomplete="off"
+        style="font-size:13px;"
+        oninput="try{localStorage.setItem('sherlock_tavily_key',this.value)}catch(e){}">
+    </div>
+
     <!-- Wake word -->
     <div class="field">
       <label>Wake Word <span style="font-weight:400;opacity:.5">(say this to get Sherlock's attention)</span></label>
@@ -1001,6 +1016,7 @@
     </div>
 
     <button class="icon-btn" id="ttsBtn" onclick="toggleTTS()" title="Auto-read AI responses">🔇</button>
+    <button class="icon-btn" id="kokoroBtn" onclick="toggleKokoro()" title="Kokoro TTS — high-quality AI voice (loads ~80MB once, free)" style="font-size:11px;padding:5px 9px;opacity:0.5">🎙</button>
     <button class="icon-btn" id="modeBtn" onclick="cycleSensitivity()" title="AI chattiness — click to cycle">🎯</button>
     <button class="icon-btn" onclick="openMeetingSettings()" title="Switch provider / API key" style="font-size:16px;">⚙️</button>
     <button class="icon-btn" onclick="showKbHelp()" title="Keyboard shortcuts (press ?)">⌨️</button>
@@ -1697,6 +1713,22 @@ async function extractPDF(file) {
   return text;
 }
 
+// ── processPDFFile: shared helper so fetchArxiv + drag-drop share same pipeline ──
+async function processPDFFile(file) {
+  document.getElementById('fileName').textContent = '✓ ' + file.name;
+  // Inject into the hidden file input so startMeeting can read it
+  try {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    document.getElementById('pdfFile').files = dt.files;
+  } catch(e) { /* DataTransfer not supported in all browsers */ }
+  // Pre-populate title if blank
+  const titleInput = document.getElementById('paperTitleInput');
+  if (titleInput && !titleInput.value.trim()) {
+    titleInput.value = file.name.replace(/\.pdf$/i, '');
+  }
+}
+
 // ── MODEL SELECT ─────────────────────────────
 function populateModelSelect(p) {
   const sel = document.getElementById('modelSelect');
@@ -1808,7 +1840,14 @@ async function startMeeting() {
   document.getElementById('paperTitle').textContent = paperTitle_;
   // Background: enrich context with Semantic Scholar related papers
   relatedContext = '';
-  enrichFromSemanticScholar(paperTitle_).catch(() => {});
+  // Enrichment: SearchAPI (Google Scholar) if key present, else OpenAlex (free, CORS-safe)
+  (async () => {
+    try {
+      const usedSearchApi = await enrichFromSearchApi(paperTitle_);
+      if (!usedSearchApi) await enrichFromOpenAlex(paperTitle_);
+    } catch(e) { /* ignore */ }
+  })();
+  enrichFromTavily(paperTitle_).catch(() => {});
   setStatus('on', 'Ready — press 🎤');
   btn.disabled = false; lbl.textContent = 'Start Meeting';
 }
@@ -2087,8 +2126,8 @@ async function callAnthropic(userMsg) {
   return (await res.json()).content[0].text.trim();
 }
 
-// ── SEMANTIC SCHOLAR ENRICHMENT ──────────────
-async function enrichFromSemanticScholar(title) {
+// ── OPENALEX ENRICHMENT (CORS-safe replacement for Semantic Scholar) ────────
+async function enrichFromOpenAlex(title) {
   function setEnrichStatus(msg) {
     const el = document.getElementById('enrichStatus');
     if (!el) return;
@@ -2096,47 +2135,82 @@ async function enrichFromSemanticScholar(title) {
     el.style.display = msg ? 'inline-block' : 'none';
   }
 
-  setEnrichStatus('🔍 Searching Semantic Scholar…');
+  function reconstructAbstract(inv) {
+    if (!inv) return '';
+    try {
+      const words = [];
+      for (const [word, positions] of Object.entries(inv)) {
+        for (const pos of positions) words[pos] = word;
+      }
+      return words.filter(Boolean).join(' ');
+    } catch(e) { return ''; }
+  }
+
+  setEnrichStatus('🔍 Searching OpenAlex…');
+  const BASE = 'https://api.openalex.org';
+  const EMAIL = 'tbanerje@umd.edu';
+
   try {
-    // Step 1: find the paper
-    const searchUrl = 'https://api.semanticscholar.org/graph/v1/paper/search?query='
-      + encodeURIComponent(title)
-      + '&fields=paperId,title,authors,abstract&limit=1';
-    const searchRes = await fetch(searchUrl);
-    if (!searchRes.ok) throw new Error('S2 search HTTP ' + searchRes.status);
+    // Step 1: find paper by title
+    const searchRes = await fetch(
+      `${BASE}/works?search=${encodeURIComponent(title)}&per-page=1` +
+      `&select=id,title,abstract_inverted_index,cited_by_count,referenced_works` +
+      `&mailto=${EMAIL}`
+    );
+    if (!searchRes.ok) throw new Error('OA search HTTP ' + searchRes.status);
     const searchData = await searchRes.json();
-    const paper = searchData.data?.[0];
-    if (!paper?.paperId) { setEnrichStatus(''); return; }
+    const paper = searchData.results?.[0];
+    if (!paper?.id) { setEnrichStatus(''); return; }
+
+    const oaId = paper.id.replace('https://openalex.org/', '');
 
     setEnrichStatus('📚 Fetching related work…');
 
-    // Step 2: fetch references with abstracts
-    const refUrl = 'https://api.semanticscholar.org/graph/v1/paper/'
-      + paper.paperId
-      + '/references?fields=paperId,title,abstract,authors,citationCount&limit=25';
-    const refRes = await fetch(refUrl);
-    if (!refRes.ok) throw new Error('S2 refs HTTP ' + refRes.status);
-    const refData = await refRes.json();
+    // Step 2: cited papers (references this paper cites) - up to 20
+    let refs = [];
+    const refIds = (paper.referenced_works || []).slice(0, 20);
+    if (refIds.length) {
+      try {
+        const idsFilter = refIds.map(id => id.replace('https://openalex.org/', '')).join('|');
+        const refRes = await fetch(
+          `${BASE}/works?filter=openalex_id:${idsFilter}&per-page=20` +
+          `&select=id,title,abstract_inverted_index,cited_by_count,authorships` +
+          `&mailto=${EMAIL}`
+        );
+        if (refRes.ok) {
+          const refData = await refRes.json();
+          refs = (refData.results || [])
+            .map(p => ({
+              title: p.title || '',
+              abstract: reconstructAbstract(p.abstract_inverted_index),
+              authors: (p.authorships || []).slice(0, 3).map(a => a.author?.display_name).filter(Boolean),
+              citationCount: p.cited_by_count || 0
+            }))
+            .filter(p => p.abstract.length > 80)
+            .sort((a, b) => b.citationCount - a.citationCount)
+            .slice(0, 8);
+        }
+      } catch(e) { /* ignore */ }
+    }
 
-    const refs = (refData.data || [])
-      .map(r => r.citedPaper)
-      .filter(p => p?.abstract && p.abstract.length > 80)
-      .sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0))
-      .slice(0, 8);
-
-    // Step 3: also get citing papers (what cites this paper?)
-    const citUrl = 'https://api.semanticscholar.org/graph/v1/paper/'
-      + paper.paperId
-      + '/citations?fields=paperId,title,abstract,authors,citationCount&limit=15';
+    // Step 3: papers that cite this work (recent citations)
     let citingPapers = [];
     try {
-      const citRes = await fetch(citUrl);
+      const citRes = await fetch(
+        `${BASE}/works?filter=cites:${oaId}&per-page=8&sort=cited_by_count:desc` +
+        `&select=id,title,abstract_inverted_index,cited_by_count,authorships` +
+        `&mailto=${EMAIL}`
+      );
       if (citRes.ok) {
         const citData = await citRes.json();
-        citingPapers = (citData.data || [])
-          .map(c => c.citingPaper)
-          .filter(p => p?.abstract && p.abstract.length > 80)
-          .sort((a, b) => (b.citationCount || 0) - (a.citationCount || 0))
+        citingPapers = (citData.results || [])
+          .map(p => ({
+            title: p.title || '',
+            abstract: reconstructAbstract(p.abstract_inverted_index),
+            authors: (p.authorships || []).slice(0, 3).map(a => a.author?.display_name).filter(Boolean),
+            citationCount: p.cited_by_count || 0
+          }))
+          .filter(p => p.abstract.length > 80)
           .slice(0, 4);
       }
     } catch(e) { /* ignore */ }
@@ -2144,12 +2218,12 @@ async function enrichFromSemanticScholar(title) {
     if (refs.length === 0 && citingPapers.length === 0) { setEnrichStatus(''); return; }
 
     const fmtPaper = (p) => {
-      const authors = (p.authors || []).map(a => a.name).slice(0, 3).join(', ');
-      const abstract = (p.abstract || '').slice(0, 280);
+      const authors = p.authors.join(', ');
+      const abstract = p.abstract.slice(0, 280);
       return `• "${p.title}" (${authors}): ${abstract}…`;
     };
 
-    let ctx = '\n\n<related_work>\nSherlock has additional knowledge from Semantic Scholar about papers related to this work. Use this context to give richer, more connected answers.\n';
+    let ctx = '\n\n<related_work>\nSherlock has additional knowledge from OpenAlex about papers related to this work. Use this context to give richer, more connected answers.\n';
     if (refs.length) {
       ctx += '\n[Cited by this paper]\n' + refs.map(fmtPaper).join('\n');
     }
@@ -2163,10 +2237,84 @@ async function enrichFromSemanticScholar(title) {
     setEnrichStatus(`✅ +${total} related papers in context`);
     setTimeout(() => setEnrichStatus(''), 5000);
   } catch(e) {
-    console.warn('Semantic Scholar enrichment failed:', e.message);
-    document.getElementById('enrichStatus') && (document.getElementById('enrichStatus').style.display = 'none');
+    console.warn('OpenAlex enrichment failed:', e.message);
+    const el = document.getElementById('enrichStatus');
+    if (el) el.style.display = 'none';
   }
 }
+
+
+// ── SEARCHAPI GOOGLE SCHOLAR ENRICHMENT ────────────────────────────────────
+async function enrichFromSearchApi(title) {
+  const key = document.getElementById('searchApiKey')?.value.trim()
+    || (() => { try { return localStorage.getItem('sherlock_searchapi_key') || ''; } catch(e) { return ''; } })();
+  if (!key) return false; // signal: no key, caller should try OpenAlex
+
+  function setEnrichStatus(msg) {
+    const el = document.getElementById('enrichStatus');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.display = msg ? 'inline-block' : 'none';
+  }
+
+  setEnrichStatus('🎓 Searching Google Scholar…');
+  const BASE = 'https://www.searchapi.io/api/v1/search';
+
+  try {
+    // Step 1: search for the paper
+    const searchRes = await fetch(
+      `${BASE}?engine=google_scholar&q=${encodeURIComponent(title)}&num=1&api_key=${key}`
+    );
+    if (!searchRes.ok) throw new Error('SearchAPI HTTP ' + searchRes.status);
+    const searchData = await searchRes.json();
+    const top = searchData.organic_results?.[0];
+    if (!top) { setEnrichStatus(''); return true; }
+
+    const citesId = top.inline_links?.cited_by?.cites_id;
+    const snippet = top.snippet || '';
+
+    setEnrichStatus('📚 Fetching citing papers…');
+
+    // Step 2: get papers that cite this (if cites_id available)
+    let citingPapers = [];
+    if (citesId) {
+      try {
+        const citRes = await fetch(
+          `${BASE}?engine=google_scholar&cites=${citesId}&num=8&api_key=${key}`
+        );
+        if (citRes.ok) {
+          const citData = await citRes.json();
+          citingPapers = (citData.organic_results || []).slice(0, 6).map(r => ({
+            title: r.title || '',
+            snippet: r.snippet || '',
+            pub: r.publication || ''
+          })).filter(r => r.snippet.length > 40);
+        }
+      } catch(e) { /* ignore */ }
+    }
+
+    const fmtPaper = (r) => `• "${r.title}" (${r.pub}): ${r.snippet.slice(0, 250)}…`;
+
+    let ctx = '\n\n<related_work>\nSherlock retrieved live Google Scholar data about this paper.\n';
+    if (snippet) ctx += `\n[About this paper]\n${top.title}: ${snippet}\n`;
+    if (citingPapers.length) {
+      ctx += '\n[Recent papers citing this work]\n' + citingPapers.map(fmtPaper).join('\n');
+    }
+    ctx += '\n</related_work>';
+
+    relatedContext = ctx;
+    const total = citingPapers.length;
+    setEnrichStatus(total ? `✅ Google Scholar: +${total} citing papers` : '✅ Google Scholar: found');
+    setTimeout(() => setEnrichStatus(''), 5000);
+    return true;
+  } catch(e) {
+    console.warn('SearchAPI enrichment failed:', e.message);
+    const el = document.getElementById('enrichStatus');
+    if (el) el.style.display = 'none';
+    return false;
+  }
+}
+
 
 function buildSystem() {
   const paper = paperText.length > MAX_PAPER_CHARS
@@ -2329,12 +2477,90 @@ function submitAsk() {
 
 // ── TTS ──────────────────────────────────────
 let activeSpeakBtn = null;
+let kokoroReady   = false;
+let kokoroPipeline = null;
+let kokoroVoice   = 'af_heart';  // default Kokoro voice
+let useKokoro     = false;        // toggled by user in settings
 
 function toggleTTS() {
   ttsOn = !ttsOn;
   const btn = document.getElementById('ttsBtn');
   btn.textContent = ttsOn ? '🔊' : '🔇';
   btn.classList.toggle('on', ttsOn);
+}
+
+async function toggleKokoro() {
+  const btn = document.getElementById('kokoroBtn');
+  if (useKokoro) {
+    useKokoro = false;
+    if (btn) { btn.style.opacity = '0.5'; btn.style.background = ''; }
+    return;
+  }
+  if (!kokoroPipeline) {
+    if (btn) { btn.textContent = '⏳ Loading…'; btn.style.opacity = '1'; }
+    try {
+      // Load kokoro-js via transformers.js ESM — first load is ~80MB (cached thereafter)
+      const { KokoroPipeline } = await import('https://cdn.jsdelivr.net/npm/kokoro-js@1.2.2/dist/kokoro.min.js');
+      kokoroPipeline = await KokoroPipeline.from_pretrained('onnx-community/Kokoro-82M-v1.0', { dtype: 'q8' });
+      kokoroReady = true;
+      useKokoro = true;
+      if (btn) { btn.textContent = '🎙 Kokoro ✓'; btn.style.opacity = '1'; btn.style.background = 'var(--accent-dim)'; }
+      // Play a quick sample
+      const { audio } = await kokoroPipeline('Kokoro is ready. I can read responses aloud for you.', { voice: kokoroVoice });
+      const blob = new Blob([audio], { type: 'audio/wav' });
+      const url = URL.createObjectURL(blob);
+      const a = new Audio(url);
+      a.onended = () => URL.revokeObjectURL(url);
+      a.play();
+    } catch(e) {
+      console.error('Kokoro load failed:', e);
+      if (btn) { btn.textContent = '🎙 Kokoro'; btn.style.opacity = '0.5'; }
+      alert('Kokoro failed to load: ' + e.message + '\n\nFalling back to browser TTS.');
+    }
+  } else {
+    useKokoro = true;
+    if (btn) { btn.style.opacity = '1'; btn.style.background = 'var(--accent-dim)'; }
+  }
+}
+
+// ── TAVILY WEB SEARCH ENRICHMENT ───────────────────────────────────
+async function enrichFromTavily(title) {
+  const key = document.getElementById('tavilyKey')?.value.trim()
+    || (() => { try { return localStorage.getItem('sherlock_tavily_key') || ''; } catch(e) { return ''; } })();
+  if (!key) return;
+
+  try {
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: key,
+        query: title + ' machine learning research',
+        search_depth: 'basic',
+        max_results: 5,
+        include_answer: true
+      })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.results?.length && !data.answer) return;
+
+    let tavilyCtx = '\n\n<web_search>\nSherlock also searched the web for recent context about this paper:\n';
+    if (data.answer) tavilyCtx += '\nSummary: ' + data.answer + '\n';
+    const results = (data.results || []).slice(0, 4);
+    results.forEach(r => {
+      tavilyCtx += `\n• ${r.title}: ${(r.content || '').slice(0, 200)}… (${r.url})`;
+    });
+    tavilyCtx += '\n</web_search>';
+
+    relatedContext = (relatedContext || '') + tavilyCtx;
+    const enrichEl = document.getElementById('enrichStatus');
+    if (enrichEl && enrichEl.style.display !== 'none') {
+      enrichEl.textContent += ' + web';
+    }
+  } catch(e) {
+    console.warn('Tavily search failed:', e.message);
+  }
 }
 
 function showTTSBanner(text) {
@@ -2349,6 +2575,10 @@ function hideTTSBanner() {
 }
 function stopSpeaking() {
   window.speechSynthesis.cancel();
+  if (window._kokoroAudio) {
+    try { window._kokoroAudio.pause(); window._kokoroAudio.currentTime = 0; } catch(e) {}
+    window._kokoroAudio = null;
+  }
   // onend will fire and clean everything up
 }
 
@@ -2436,36 +2666,59 @@ function stopSpeaking() {
   }
 
   function speak(text, btn) {
-  // If already speaking, stop (toggle off)
+  if (useKokoro && kokoroPipeline) {
+    speakKokoro(text, btn);
+    return;
+  }
+  speakWebSpeech(text, btn);
+}
+
+async function speakKokoro(text, btn) {
+  // Stop any in-progress audio
+  stopSpeaking();
+  if (btn) { activeSpeakBtn = btn; btn.textContent = '⏹ Stop'; }
+  showTTSBanner(text);
+  sherlockStatus('speaking');
+  try {
+    const { audio } = await kokoroPipeline(text, { voice: kokoroVoice });
+    const blob = new Blob([audio], { type: 'audio/wav' });
+    const url  = URL.createObjectURL(blob);
+    const aud  = new Audio(url);
+    window._kokoroAudio = aud;
+    aud.onended = aud.onerror = () => {
+      if (activeSpeakBtn) { activeSpeakBtn.textContent = '🔊 Read aloud'; activeSpeakBtn = null; }
+      hideTTSBanner();
+      sherlockStatus(isThinking ? 'thinking' : 'idle');
+      URL.revokeObjectURL(url);
+    };
+    aud.play();
+  } catch(e) {
+    console.warn('Kokoro TTS error, falling back to Web Speech:', e);
+    if (activeSpeakBtn) { activeSpeakBtn.textContent = '🔊 Read aloud'; activeSpeakBtn = null; }
+    hideTTSBanner();
+    sherlockStatus('idle');
+    speakWebSpeech(text, btn);
+  }
+}
+
+function speakWebSpeech(text, btn) {
   if (window.speechSynthesis.speaking) {
     window.speechSynthesis.cancel();
-    // onend fires synchronously after cancel in most browsers, which clears activeSpeakBtn.
-    // If the same button triggered this, we're toggling off — done.
     if (btn && btn === activeSpeakBtn) return;
   }
-
   const u = new SpeechSynthesisUtterance(text);
   u.rate = 1.05;
   const voices = window.speechSynthesis.getVoices();
   const v = voices.find(v => /Google|Neural|Samantha|Daniel|Karen/i.test(v.name));
   if (v) u.voice = v;
-
-  // Track which per-card button is active (may scroll out of view)
-  if (btn) {
-    activeSpeakBtn = btn;
-    btn.textContent = '⏹ Stop';
-  }
-
-  // Always show the persistent banner — visible regardless of scroll position
+  if (btn) { activeSpeakBtn = btn; btn.textContent = '⏹ Stop'; }
   showTTSBanner(text);
   sherlockStatus('speaking');
-
   u.onend = u.onerror = () => {
     if (activeSpeakBtn) { activeSpeakBtn.textContent = '🔊 Read aloud'; activeSpeakBtn = null; }
     hideTTSBanner();
     sherlockStatus(isThinking ? 'thinking' : 'idle');
   };
-
   window.speechSynthesis.speak(u);
 }
 
@@ -2831,6 +3084,15 @@ function clearSavedKey() {
   labMembers = loadMembers();
   renderMemberList();
   try { refreshEmailPreview(); } catch(e) {}
+  // Restore saved API keys
+  try {
+    const tk = localStorage.getItem('sherlock_tavily_key');
+    const tel = document.getElementById('tavilyKey');
+    if (tk && tel) tel.value = tk;
+    const sk = localStorage.getItem('sherlock_searchapi_key');
+    const sel = document.getElementById('searchApiKey');
+    if (sk && sel) sel.value = sk;
+  } catch(e) {}
 })();
 
 </script>
