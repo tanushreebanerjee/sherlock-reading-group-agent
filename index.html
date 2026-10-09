@@ -910,8 +910,8 @@ async function testApiKey() {
       status = res.status;
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        const models = (data.data || []).map(m => m.id).slice(0, 3).join(', ');
-        errEl.textContent = '✅ Key valid! Available models: ' + models;
+        const allIds = (data.data || []).map(m => m.id);
+        const models = allIds.filter(id => !id.includes('whisper') && !id.includes('tts')).join(', ');
         errEl.style.color = 'var(--green)';
       } else {
         errEl.textContent = '❌ HTTP ' + status + ': ' + (data.error?.message || JSON.stringify(data));
