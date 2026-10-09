@@ -2590,40 +2590,58 @@ function stopSpeaking() {
     const errEl = document.getElementById('arxivErr');
     const btn   = document.getElementById('arxivBtn');
     errEl.textContent = '';
-    let url = input.value.trim();
-    if (!url) return;
+    let raw = input.value.trim();
+    if (!raw) return;
 
-    // Normalise to PDF URL
-    // abs/XXXX.XXXXX  →  pdf/XXXX.XXXXX.pdf
-    // already ends in .pdf → use as-is
-    url = url.replace(/^(https?:\/\/)?arxiv\.org\//, 'https://arxiv.org/');
-    if (!url.startsWith('http')) url = 'https://' + url;
+    // Parse arXiv ID from any form:
+    // 2510.11690 | arxiv.org/abs/2510.11690 | https://arxiv.org/pdf/2510.11690v2
+    const idRe = /\b(\d{4}\.\d{4,5}(?:v\d+)?)\b/;
+    const m = raw.match(idRe);
+    const arxivId = m ? m[1] : null;
+    if (!arxivId) {
+      errEl.textContent = 'Could not find an arXiv ID. Paste the URL or just the ID, e.g. 2510.11690';
+      return;
+    }
 
-    const absMatch = url.match(/arxiv\.org\/abs\/([\d.v]+)/i);
-    const pdfMatch = url.match(/arxiv\.org\/pdf\/([\d.v]+)/i);
-    const arxivId  = (absMatch || pdfMatch)?.[1];
-    if (!arxivId) { errEl.textContent = 'Paste a valid arxiv.org/abs/... or arxiv.org/pdf/... link'; return; }
-
-    const pdfUrl = 'https://arxiv.org/pdf/' + arxivId + '.pdf';
+    const pdfUrl   = 'https://arxiv.org/pdf/' + arxivId;
+    const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(pdfUrl);
+    const apiUrl   = 'https://export.arxiv.org/api/query?id_list=' + arxivId;
 
     btn.textContent = 'Fetching…';
     btn.disabled = true;
-    try {
-      const res = await fetch(pdfUrl);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const blob = await res.blob();
-      const file = new File([blob], arxivId + '.pdf', { type: 'application/pdf' });
 
-      // Reuse the existing PDF processing pipeline
+    // Pre-fill title from ArXiv Atom API (CORS-safe)
+    const titleInput = document.getElementById('paperTitleInput');
+    fetch(apiUrl).then(r => r.text()).then(xml => {
+      const tm = xml.match(/<title>([^<]+)<\/title>/g);
+      // first <title> is "ArXiv Query Interface", second is the paper
+      const paperTitle = tm && tm[1] ? tm[1].replace(/<\/?title>/g,'').replace(/\s+/g,' ').trim() : '';
+      if (paperTitle && titleInput && !titleInput.value.trim()) {
+        titleInput.value = paperTitle;
+      }
+    }).catch(() => {});
+
+    // Fetch PDF via CORS proxy
+    try {
+      const res = await fetch(proxyUrl);
+      if (!res.ok) throw new Error('proxy HTTP ' + res.status);
+      const blob = await res.blob();
+      if (blob.size < 5000) throw new Error('response too small');
+      const file = new File([blob], arxivId + '.pdf', { type: 'application/pdf' });
       await processPDFFile(file);
       input.value = '';
-      btn.textContent = 'Fetch PDF';
-      btn.disabled = false;
+      errEl.style.color = 'var(--green)';
+      errEl.textContent = '✓ PDF loaded from arXiv';
+      setTimeout(() => { errEl.textContent = ''; errEl.style.color = ''; }, 3000);
     } catch(err) {
-      errEl.textContent = 'Could not fetch PDF: ' + err.message + '. Try downloading and uploading manually.';
-      btn.textContent = 'Fetch PDF';
-      btn.disabled = false;
+      // Fallback: open PDF in new tab + ask user to upload manually
+      console.warn('arXiv fetch failed:', err.message);
+      window.open(pdfUrl, '_blank');
+      errEl.style.color = '';
+      errEl.textContent = '⚠️ Auto-fetch blocked by browser. PDF opened in new tab — download it and upload below.';
     }
+    btn.textContent = 'Fetch PDF';
+    btn.disabled = false;
   }
 
   // ── Sherlock avatar status ─────────────────────────────────────
