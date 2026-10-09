@@ -1155,8 +1155,9 @@ async function callGroq(userMsg) {
   });
   if (!res.ok) {
     const e = await res.json().catch(() => ({}));
-    const msg = e.error?.message || JSON.stringify(e) || `Groq HTTP ${res.status}`;
-    throw new Error(msg);
+    const msg = e.error?.message || JSON.stringify(e) || 'Groq error';
+    const hint = res.status === 401 ? ' — regenerate key at console.groq.com/keys' : '';
+    throw new Error(`[HTTP ${res.status}] ${msg}${hint}`);
   }
   return (await res.json()).choices[0].message.content.trim();
 }
